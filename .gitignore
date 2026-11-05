@@ -2,3 +2,4 @@ bin/
 obj/
 dist/
 local/
+__pycache__/
