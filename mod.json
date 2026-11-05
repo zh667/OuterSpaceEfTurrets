@@ -1,0 +1,8 @@
+{
+  "name": "EfTurrets",
+  "title": "工业防御塔",
+  "packageId": "zh6657.efturrets",
+  "csproj": "EfTurrets.csproj",
+  "dll": "EfTurrets.dll",
+  "folder": "EfTurrets"
+}

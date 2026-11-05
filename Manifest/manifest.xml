@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ModXmlManifest>
+  <packageId>zh6657.efturrets</packageId>
+  <name>工业防御塔</name>
+  <author>zh6657</author>
+  <desc>工业防御塔</desc>
+  <versions>
+    <ModMetaVersion>
+      <version>v_common</version>
+      <main>EfTurrets.dll</main>
+    </ModMetaVersion>
+  </versions>
+</ModXmlManifest>
