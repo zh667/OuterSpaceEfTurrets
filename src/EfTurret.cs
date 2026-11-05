@@ -15,6 +15,9 @@ namespace EfTurrets
         public static bool TestPower;
         public static string TestPowerId;   // when set, only this tower gets the test power
         public static readonly System.Collections.Generic.Dictionary<string, int> TestShots = new System.Collections.Generic.Dictionary<string, int>();
+        public static readonly System.Collections.Generic.Dictionary<string, int> TestEffects = new System.Collections.Generic.Dictionary<string, int>();
+        public static void CountShot(string id) { if (id == null) return; TestShots.TryGetValue(id, out int n); TestShots[id] = n + 1; }
+        public static void CountEffect(string id, int k = 1) { if (id == null) return; TestEffects.TryGetValue(id, out int n); TestEffects[id] = n + k; }
         public BuildAnim_Player AnimPlayer => buildPlayer;
 
         public override bool isSupportElectriced() => TestPower ? (TestPowerId == null || TestPowerId == buildDef?.ID) : base.isSupportElectriced();
@@ -25,7 +28,8 @@ namespace EfTurrets
             {
                 if (!(bean is F_DefenseDef) || EfData.Find(bean.ID) == null) return null;
                 var go = new GameObject("EfTurret_" + bean.ID);
-                var t = go.AddComponent<EfTurret>();
+                var spec = EfData.Find(bean.ID);
+                EfTurret t = spec.Kind != null ? go.AddComponent<EfSpecialTurret>() : go.AddComponent<EfTurret>();
                 t.configAnim<EfAnim>();
                 return t;
             }
@@ -64,7 +68,7 @@ namespace EfTurrets
         protected override void shootBullets(CatCollisionArea area)
         {
             shootCount++;
-            string id = buildDef?.ID; if (id != null) { TestShots.TryGetValue(id, out int n); TestShots[id] = n + 1; }
+            CountShot(buildDef?.ID);
             Vector3 p = base.transform.localPosition;
             BulletManager.getInstance().addDefenseBullet(this, targetRole, p.x + area.centerX(), p.y + area.centerY(), curAngle);
         }

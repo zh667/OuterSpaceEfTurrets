@@ -25,15 +25,16 @@ namespace EfTurrets
             string root = Path.Combine(Application.streamingAssetsPath, "sprite");
             string rel = Relative(root, dir);
             if (rel == null) { Problem = "sprite folder " + dir + " is on another drive than " + root; Debug.LogError("[EfTurrets] " + Problem); return; }
-            foreach (var t in EfData.Towers)
+            var names = new List<string>(); foreach (var t in EfData.Towers) names.Add(t.Id);
+            foreach (var id in names)
             {
-                string src = Path.Combine(dir, "ef_" + t.Id + ".bin");
+                string src = Path.Combine(dir, "ef_" + id + ".bin");
                 if (!File.Exists(src)) { Problem = "missing " + src; Debug.LogError("[EfTurrets] " + Problem); continue; }
                 byte[] data = File.ReadAllBytes(src);
                 byte[] fixedBin = ReplaceImageNames(data, Placeholder, rel);
-                string dst = Path.Combine(dir, "ef_" + t.Id + ".rt.bin");
+                string dst = Path.Combine(dir, "ef_" + id + ".rt.bin");
                 if (!File.Exists(dst) || !Same(File.ReadAllBytes(dst), fixedBin)) File.WriteAllBytes(dst, fixedBin);
-                players[t.Id] = rel + "ef_" + t.Id + ".rt";
+                players[id] = rel + "ef_" + id + ".rt";
             }
             Debug.Log("[EfTurrets] sprites from " + rel + " (" + players.Count + ")");
         }

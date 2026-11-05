@@ -144,6 +144,7 @@ def build(t):
         if hi not in mod_cache: mod_cache[hi] = place(off + hi, h)
         mid, lx, ly = mod_cache[hi]
         rx, ry = d["recoil_px_per_m"]; sx = rx * rec / k / tu; sy = ry * rec / k / tu
+        if t.get("static"): sx, sy = 0.0, -0.6      # whole tower stands still: just a small kick upwards
         dx, dy = int(round(sx)), int(round(sy))
         if dx == 0 and dy == 0: dx, dy = (int(math.copysign(1, sx)) if abs(sx) >= abs(sy) else 0), (int(math.copysign(1, sy)) if abs(sy) > abs(sx) else 0)
         mpx = find_muzzles(rd, d, t.get("muzzles", 1), t.get("muzzle_mode", "front"))

@@ -143,6 +143,128 @@
    "upm": 21.33,
    "size": 4,
    "muzzles": 1
+  },
+  {
+   "id": "7103",
+   "fam": "battle_jet_1",
+   "head": [
+    "part_02_0"
+   ],
+   "base": [
+    "part_01_0"
+   ],
+   "upm": 32,
+   "size": 2,
+   "muzzles": 1
+  },
+  {
+   "id": "7202",
+   "fam": "battle_frost_1",
+   "head": [
+    "part_02_0",
+    "part_03_0"
+   ],
+   "base": [
+    "part_01_0"
+   ],
+   "upm": 32,
+   "size": 2,
+   "muzzles": 1
+  },
+  {
+   "id": "7203",
+   "fam": "battle_debuff_1",
+   "head": [
+    "part_02_0",
+    "part_03_0"
+   ],
+   "base": [
+    "part_01_0"
+   ],
+   "upm": 32,
+   "size": 2,
+   "muzzles": 1,
+   "muzzle_mode": "topfront"
+  },
+  {
+   "id": "7204",
+   "fam": "battle_lightning_1",
+   "head": [
+    "part_01_variant_0"
+   ],
+   "base": [],
+   "upm": 32,
+   "size": 2,
+   "muzzles": 1,
+   "muzzle_mode": "top",
+   "static": true
+  },
+  {
+   "id": "7205",
+   "fam": "battle_medic_1",
+   "head": [
+    "part_01_variant_0"
+   ],
+   "base": [],
+   "upm": 32,
+   "size": 2,
+   "muzzles": 1,
+   "muzzle_mode": "top",
+   "static": true
+  },
+  {
+   "id": "7305",
+   "fam": "battle_fog_1",
+   "head": [
+    "part_02_0",
+    "part_03_0"
+   ],
+   "base": [
+    "part_01_0"
+   ],
+   "upm": 32,
+   "size": 2,
+   "muzzles": 1,
+   "muzzle_mode": "topfront"
+  },
+  {
+   "id": "7306",
+   "fam": "battle_shockwave_1",
+   "head": [
+    "part_01_variant_0"
+   ],
+   "base": [],
+   "upm": 32,
+   "size": 2,
+   "muzzles": 1,
+   "muzzle_mode": "top",
+   "static": true
+  },
+  {
+   "id": "7307",
+   "fam": "battle_trap_1",
+   "head": [
+    "part_01_variant_0"
+   ],
+   "base": [],
+   "upm": 32,
+   "size": 2,
+   "muzzles": 1,
+   "muzzle_mode": "top",
+   "static": true
+  },
+  {
+   "id": "7404",
+   "fam": "battle_lightning_2",
+   "head": [
+    "part_01_variant_0"
+   ],
+   "base": [],
+   "upm": 32,
+   "size": 2,
+   "muzzles": 1,
+   "muzzle_mode": "top",
+   "static": true
   }
  ]
 }

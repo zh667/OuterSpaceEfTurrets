@@ -31,7 +31,7 @@ def build():
         if not os.path.isdir(src):
             sys.exit("missing " + src + " (run tools/assets/render_all.py and make_assets.py)")
         out = os.path.join(dist, *dst); os.makedirs(out, exist_ok=True)
-        files = [f for f in os.listdir(src) if f.endswith((".bin", ".png")) and ".rt." not in f]
+        files = [f for f in os.listdir(src) if f.endswith((".bin", ".png")) and ".rt." not in f and not f.startswith("ef_fx")]
         for f in files:
             shutil.copy2(os.path.join(src, f), os.path.join(out, f))
         print(sub, len(files), "files")

@@ -30,6 +30,20 @@ Mod for *Outer Space / 秩序：新曙光* (Steam 3080070), started from `E:/pro
 - Self-test: run on a save that is on a planet (`--save zh6657 --exact-save`); the mothership stacks five decks on one
   map and towers land on decks the camera does not show.
 
+## Second batch (special towers, 2026-11-05)
+- `src/EfSpecialTurret.cs`: the visible shot is a real game bullet (`BulletManager.addDefenseBullet`, the row's
+  BulletID/AimType/DamageRange/Drag/Shocktime), so flight, splash and slow are the game's; ice field, corrosion,
+  poison, bouncing arcs, electric orb, push, stun, flame band and healing are done by the mod, timed to the landing
+  (`Bullet_Throw` flight = distance / (BulletSpeed * 32)).
+- Effects only from the game's own assets (`src/EfFx.cs`): F3D prefabs under `Prefab/Eff_Defense`, `Eff_Bullets`,
+  `Eff_Groung/{Bomb,Fire,AirBomb}` and the effect sheet (`EffectManager.addEffect_Global`). The user rejected drawn
+  cartoon pixel effects ("太动画了"). Weather prefabs (`Eff_Groung/Cloud/cloud1`, Fog, Cold Current, Hot Wave) show
+  nothing or throw (Mod_Cloud.Update) when placed alone; `EffectManager.addPrefabEffect` reuses any finished prefab
+  effect regardless of path, so do not use it.
+- `--tests fxgallery` shows the game's effect prefabs one by one (screenshots `selftest-gal-*`).
+- Tests: the player's people join fights, so special towers are judged by what they did themselves (hits, pushes,
+  slows, stuns) and any failed fight is retried once from the other side.
+
 ## Rules learned the hard way (trade helper)
 - Game objects are shared with the game's worker threads. Touch them only under the game's locks in the game's order:
   `FWTradeSession.SyncRoot`, then `FWGameData.ArchiveSyncRoot` (`Kit/GameLock.cs`, tried, never awaited). Skipping

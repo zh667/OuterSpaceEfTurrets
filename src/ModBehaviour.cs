@@ -6,13 +6,18 @@ namespace EfTurrets
     // runs them (EfTurret is a Defense_BaseTurret). The self-test starts here when the isolated test asks for it.
     public class ModBehaviour : MonoBehaviour
     {
-        public const string Version = "0.1.0";
+        public const string Version = "0.2.0";
         public static ModBehaviour Instance;
 
         void Awake()
         {
             Instance = this;
             if (SelfTest.Requested()) gameObject.AddComponent<SelfTest>();
+        }
+
+        void Update()
+        {
+            try { EfFx.Update(); } catch (System.Exception e) { Debug.LogWarning("[EfTurrets] fx update: " + e.Message); }
         }
     }
 }

@@ -48,6 +48,12 @@ namespace EfTurrets
                 if (s.AimType >= 0) r.AimType = s.AimType;
                 if (s.Accuracy != null) r.Accuracy = s.Accuracy;
                 r.Consume = s.Consume; r.Materials = s.Materials;
+                if (s.Bullet != null) r.BulletID = s.Bullet;
+                if (s.Muzzle != null) r.FireType = s.Muzzle;
+                if (s.Hit != null) { r.HitHuman = s.Hit; r.HitLand = s.Hit; r.HitOther = s.Hit; }
+                if (s.BulletSpeed >= 0) r.BulletSpeed = s.BulletSpeed;
+                if (s.Drag >= 0) r.Drag = s.Drag;
+                if (s.Shocktime >= 0) r.Shocktime = s.Shocktime;
                 if (s.Workload > 0) r.Workload = s.Workload;
                 Replace(r);
                 ModIconCombine.additions.RemoveAll(b => b is F_DefenseDef && b.ID == s.Id);
