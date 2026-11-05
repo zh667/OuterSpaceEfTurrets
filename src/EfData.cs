@@ -24,6 +24,7 @@ namespace EfTurrets
     {
         public string Id, Name, Detail, Pre, Path, Materials, Template = "def-1";
         public float X, Y, Level;
+        public int Icon = -1;   // frame in the game's Icon_Technology (borrowed from a neighbouring defence node)
         public List<string> Towers = new List<string>();
     }
 
@@ -115,32 +116,34 @@ namespace EfTurrets
                 Consume = "250", Workload = 60, Bullet = "bullets\\Plasma_Big", Muzzle = "muzzle\\Plasma_Big", Hit = "bomb\\Laser_Big", AimType = 2, Accuracy = "0", BulletSpeed = 36f, Materials = "12_65_20|12_39_12|12_35_2|12_38_3" },
         };
 
-        // Tech nodes sit next to the game's own defence nodes of the same level (positions checked against the tree).
+        // Tech nodes sit next to the game's own nodes of the same level. Positions come from tools/tech_layout.py, a
+        // search over the game's whole tree (every card and connecting line) so that no card covers another card or a
+        // line; the self-test (--tests techtree) opens the game's tree on each node for a screenshot.
         public static readonly List<TechSpec> Techs = new List<TechSpec>
         {
-            new TechSpec { Id = "ef-def-1", Name = "工业炮塔基础", Level = 1, Pre = "part-1", X = 2950, Y = 375,
-                Path = "part-1,t:2850.0,375.0:l", Materials = "12_16_60|12_6_40",
+            new TechSpec { Id = "ef-def-1", Name = "工业炮塔基础", Icon = 169, Level = 1, Pre = "part-1", X = 2950, Y = -125,
+                Path = "part-1,t:2850.0,-125:l", Materials = "12_16_60|12_6_40",
                 Detail = "解锁铳械塔、榴弹塔、激流塔。" },
-            new TechSpec { Id = "ef-def-2", Name = "工业炮塔强化", Level = 2, Pre = "def-2", X = 9900, Y = 425,
-                Path = "def-2,r:9800.0,400.0_9800.0,425.0:l", Materials = "12_60_15|12_24_8|12_62_1",
+            new TechSpec { Id = "ef-def-2", Name = "工业炮塔强化", Icon = 170, Level = 2, Pre = "def-2", X = 9850, Y = 700,
+                Path = "def-2,r:9750.0,400.0_9750.0,700:l", Materials = "12_60_15|12_24_8|12_62_1",
                 Detail = "解锁扩装铳械塔、液氮塔、“酸洗”、医疗塔。" },
-            new TechSpec { Id = "ef-surge-2", Name = "电涌技术", Level = 2, Pre = "226", X = 11600, Y = 575,
-                Path = "226,r:11500.0,675.0_11500.0,575.0:l", Materials = "12_29_1|12_22_2|12_33_1",
+            new TechSpec { Id = "ef-surge-2", Name = "电涌技术", Icon = 174, Level = 2, Pre = "226", X = 11300, Y = 800,
+                Path = "226,t:11200.0,800:l", Materials = "12_29_1|12_22_2|12_33_1",
                 Detail = "解锁电涌塔。" },
-            new TechSpec { Id = "ef-def-3", Name = "工业炮塔自动化", Level = 3, Pre = "def-3", X = 16250, Y = 275,
-                Path = "def-3,r:16150.0,300.0_16150.0,275.0:l", Materials = "12_41_1|12_20_15|12_33_2",
+            new TechSpec { Id = "ef-def-3", Name = "工业炮塔自动化", Icon = 171, Level = 3, Pre = "def-3", X = 16300, Y = 275,
+                Path = "def-3,r:16200.0,300.0_16200.0,275:l", Materials = "12_41_1|12_20_15|12_33_2",
                 Detail = "解锁“暴雨”铳械塔、高爆榴弹塔、哨戒塔、AF1“熔甲者”。" },
-            new TechSpec { Id = "ef-chem-3", Name = "化学阵地", Level = 3, Pre = "ef-def-3", X = 16650, Y = 275,
-                Path = "ef-def-3,r::l", Materials = "12_41_1|12_37_2|12_20_10",
+            new TechSpec { Id = "ef-chem-3", Name = "化学阵地", Icon = 258, Level = 3, Pre = "ef-def-3", X = 16400, Y = 150,
+                Path = "ef-def-3,t:16300.0,150:l", Materials = "12_41_1|12_37_2|12_20_10",
                 Detail = "解锁“毒沼”、全向声波塔。" },
-            new TechSpec { Id = "ef-ray-3", Name = "射线技术", Level = 3, Pre = "342", X = 17750, Y = 500,
-                Path = "342,r:17650.0,250.0_17650.0,500.0:l", Materials = "12_37_5|12_38_2|12_20_8",
+            new TechSpec { Id = "ef-ray-3", Name = "射线技术", Icon = 261, Level = 3, Pre = "chip-3", X = 17800, Y = 125,
+                Path = "chip-3,r:17700.0,0.0_17700.0,125:l", Materials = "12_37_5|12_38_2|12_20_8",
                 Detail = "解锁射线塔。" },
-            new TechSpec { Id = "ef-heavy-4", Name = "工业重火力", Level = 4, Pre = "2159", X = 22850, Y = 725,
+            new TechSpec { Id = "ef-heavy-4", Name = "工业重火力", Icon = 259, Level = 4, Pre = "2159", X = 22900, Y = 725,
                 Path = "2159,r::l", Materials = "12_42_8|12_39_6|12_27_2",
                 Detail = "解锁重锤迫击炮、序章炮塔。" },
-            new TechSpec { Id = "ef-ray-4", Name = "高能技术", Level = 4, Pre = "335", X = 24050, Y = 300,
-                Path = "335,r::l", Materials = "12_35_4|12_38_2|12_39_7",
+            new TechSpec { Id = "ef-ray-4", Name = "高能技术", Icon = 173, Level = 4, Pre = "335", X = 23750, Y = 425,
+                Path = "335,t:23650.0,425:l", Materials = "12_35_4|12_38_2|12_39_7",
                 Detail = "解锁高能射线塔、甲二型“电荷”。" },
         };
 

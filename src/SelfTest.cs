@@ -39,6 +39,7 @@ namespace EfTurrets
             Run(CheckTechs);
             if (req.tests == "defs") yield break;
 
+            if (req.tests == "techtree") { yield return Guard(TechTree(), "tech tree"); yield break; }
             if (req.tests == "fxgallery" || req.tests == "fxgallery2") { yield return Guard(FxGallery(), "fx gallery"); yield break; }
             EfTurret.TestPower = true;
             CloseDialogs();
@@ -407,6 +408,25 @@ namespace EfTurrets
             }
             SetClock(0f);
             c.summary = k + " effects shown";
+        }
+
+        // Opens the game's tech tree centred on each of the mod's nodes and takes a screenshot (cards and lines must
+        // not overlap anything).
+        IEnumerator TechTree()
+        {
+            var c = new Check { name = "tech tree", info = true, passed = true }; result.checks.Add(c);
+            CloseDialogs();
+            foreach (var t in EfData.Techs)
+            {
+                string err = null;
+                Locked(() => { try { FairyUIDispatcher.showTecholongy(t.Id); } catch (Exception e) { err = e.Message; } });
+                c.details.Add(t.Id + (err != null ? " ERROR " + err : ""));
+                yield return new WaitForSecondsRealtime(1.6f);
+                yield return Shot("tech-" + t.Id);
+                Locked(() => { try { TechonologyView.getInstance()?.closeDialog(); } catch { } });
+                yield return new WaitForSecondsRealtime(0.5f);
+            }
+            c.summary = EfData.Techs.Count + " nodes shown";
         }
 
         static void PutBeside(BaseRole r, BaseBuild b)

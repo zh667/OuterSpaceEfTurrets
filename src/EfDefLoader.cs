@@ -84,6 +84,7 @@ namespace EfTurrets
                 d.Building_unlock = string.Join("|", unlocks); d.NonBuilding_unlock = "-1";
                 d.Pre_technology = t.Pre; d.PathNode = t.Path; d.HexGridX = t.X; d.HexGridY = t.Y;
                 d.S_Materials = t.Materials; d.Level = t.Level;
+                if (t.Icon >= 0) d.ModuleId = t.Icon;
                 Replace(d); n++;
             }
             Report.Add("techs " + n + ", unlock entries " + u);
