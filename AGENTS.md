@@ -17,6 +17,33 @@ Mod for *Outer Space / 秩序：新曙光* (Steam 3080070), started from `E:/pro
 - A frozen test copy is dumped automatically (`local/dumps`, threads named); `tools/freeze_dump.py <pid> <dir>` does
   the same for any frozen game process (needs WinDbg's cdb from the Microsoft Store).
 
+## This mod (first batch, 2026-11-05)
+- Ten towers built from the original Endfield models (`tools/assets/towers.json`); the game's own turret logic runs them
+  (`src/EfTurret.cs` only swaps the picture for 24 pre-rendered directions and reads the muzzle from the frame).
+- Pictures: `python tools/assets/render_all.py [force] [ids]` (Blender 5.1, models from the MechDefense extraction under
+  `local/endfield/tower-library/reference-assembled`), then `python tools/assets/make_assets.py` -> `local/gen`
+  (sprite files, icons, review sheets). `tools/build.py` copies `local/gen` into the package; generated pictures stay
+  out of git.
+- Sprite layout every tower shares: action 0 idle up, 1 base + click rectangle, 2+d firing towards d, 26+d idle towards d.
+- Rows are added in `EfDefLoader.initModDef` with plain numeric ids (towers 7xxx, unlock entries 97xxx, tech ids
+  `ef-*`), because the game's own mod-row prefix (`package_id`) breaks `_`-separated references such as `10_<id>`.
+- Self-test: run on a save that is on a planet (`--save zh6657 --exact-save`); the mothership stacks five decks on one
+  map and towers land on decks the camera does not show.
+
+## Second batch (special towers, 2026-11-05)
+- `src/EfSpecialTurret.cs`: the visible shot is a real game bullet (`BulletManager.addDefenseBullet`, the row's
+  BulletID/AimType/DamageRange/Drag/Shocktime), so flight, splash and slow are the game's; ice field, corrosion,
+  poison, bouncing arcs, electric orb, push, stun, flame band and healing are done by the mod, timed to the landing
+  (`Bullet_Throw` flight = distance / (BulletSpeed * 32)).
+- Effects only from the game's own assets (`src/EfFx.cs`): F3D prefabs under `Prefab/Eff_Defense`, `Eff_Bullets`,
+  `Eff_Groung/{Bomb,Fire,AirBomb}` and the effect sheet (`EffectManager.addEffect_Global`). The user rejected drawn
+  cartoon pixel effects ("太动画了"). Weather prefabs (`Eff_Groung/Cloud/cloud1`, Fog, Cold Current, Hot Wave) show
+  nothing or throw (Mod_Cloud.Update) when placed alone; `EffectManager.addPrefabEffect` reuses any finished prefab
+  effect regardless of path, so do not use it.
+- `--tests fxgallery` shows the game's effect prefabs one by one (screenshots `selftest-gal-*`).
+- Tests: the player's people join fights, so special towers are judged by what they did themselves (hits, pushes,
+  slows, stuns) and any failed fight is retried once from the other side.
+
 ## Rules learned the hard way (trade helper)
 - Game objects are shared with the game's worker threads. Touch them only under the game's locks in the game's order:
   `FWTradeSession.SyncRoot`, then `FWGameData.ArchiveSyncRoot` (`Kit/GameLock.cs`, tried, never awaited). Skipping

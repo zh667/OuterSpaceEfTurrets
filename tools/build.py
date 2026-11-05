@@ -24,6 +24,17 @@ def build():
     os.makedirs(os.path.join(dist, "v_common", "Assemblies"))
     shutil.copy2(os.path.join(ROOT, "Manifest", "manifest.xml"), os.path.join(dist, "Manifest", "manifest.xml"))
     shutil.copy2(dll, os.path.join(dist, "v_common", "Assemblies", MOD["dll"]))
+    # pictures made by tools/assets/make_assets.py (local/gen): sprite files and build-menu icons
+    gen = os.path.join(ROOT, "local", "gen")
+    for sub, dst in (("Sprites", ("v_common", "Sprites")), ("Textures", ("v_common", "Resources", "Textures"))):
+        src = os.path.join(gen, sub)
+        if not os.path.isdir(src):
+            sys.exit("missing " + src + " (run tools/assets/render_all.py and make_assets.py)")
+        out = os.path.join(dist, *dst); os.makedirs(out, exist_ok=True)
+        files = [f for f in os.listdir(src) if f.endswith((".bin", ".png")) and ".rt." not in f and not f.startswith("ef_fx")]
+        for f in files:
+            shutil.copy2(os.path.join(src, f), os.path.join(out, f))
+        print(sub, len(files), "files")
     print("dll", os.path.getsize(dll), hashlib.sha256(open(dll, "rb").read()).hexdigest())
     return dist
 

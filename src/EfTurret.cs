@@ -1,0 +1,110 @@
+using UnityEngine;
+
+namespace EfTurrets
+{
+    // One class for every tower of the mod. Targeting, firing rhythm, bullets and damage are the game's own
+    // (Defense_BaseTurret, driven by the cloned table row); only the picture and the muzzle are different:
+    // the head is not rotated, the frame for the nearest of 24 directions is drawn instead, and the muzzle marks
+    // in that frame are already in screen position.
+    // Sprite layout (make_assets.py): action 1 = base, 2+d = firing towards d, 26+d = idle towards d.
+    public class EfTurret : Defense_BaseTurret
+    {
+        public const int ActionBase = 1, ActionFire = 2, ActionIdle = 26, Directions = 24;
+        TowerSpec spec;
+        // test hooks (SelfTest): run without power, count shots per tower
+        public static bool TestPower;
+        public static string TestPowerId;   // when set, only this tower gets the test power
+        public static readonly System.Collections.Generic.Dictionary<string, int> TestShots = new System.Collections.Generic.Dictionary<string, int>();
+        public static readonly System.Collections.Generic.Dictionary<string, int> TestEffects = new System.Collections.Generic.Dictionary<string, int>();
+        public static void CountShot(string id) { if (id == null) return; TestShots.TryGetValue(id, out int n); TestShots[id] = n + 1; }
+        public static void CountEffect(string id, int k = 1) { if (id == null) return; TestEffects.TryGetValue(id, out int n); TestEffects[id] = n + k; }
+        public BuildAnim_Player AnimPlayer => buildPlayer;
+
+        public override bool isSupportElectriced() => TestPower ? (TestPowerId == null || TestPowerId == buildDef?.ID) : base.isSupportElectriced();
+
+        public static BaseBuild Create(BaseDef bean)
+        {
+            try
+            {
+                if (!(bean is F_DefenseDef) || EfData.Find(bean.ID) == null) return null;
+                var go = new GameObject("EfTurret_" + bean.ID);
+                var spec = EfData.Find(bean.ID);
+                EfTurret t = spec.Kind != null ? go.AddComponent<EfSpecialTurret>() : go.AddComponent<EfTurret>();
+                t.configAnim<EfAnim>();
+                return t;
+            }
+            catch (System.Exception e) { Debug.LogError("[EfTurrets] create " + bean?.ID + ": " + e); return null; }
+        }
+
+        TowerSpec Spec => spec ?? (spec = EfData.Find(buildDef?.ID));
+
+        // 0 = screen up, clockwise, 15 degrees apart. curAngle is the game's: 0 = right, 90 = up (counter-clockwise).
+        public int Direction
+        {
+            get
+            {
+                float cw = (90f - curAngle) % 360f; if (cw < 0) cw += 360f;
+                return Mathf.RoundToInt(cw / 15f) % Directions;
+            }
+        }
+
+        public float Angle => curAngle;
+
+        public override void paint()
+        {
+            anim.setRotate(0f);
+            buildPlayer.paintActionFrame(ActionBase, 0, 0f, 0f, 0f, centerRotate: false, 1f, 1f);
+            if (state == 3) buildPlayer.paintAction(0f, 0f);
+            else buildPlayer.paintActionFrame(ActionIdle + Direction, 0, 0f, 0f, 0f, centerRotate: false, 1f, 1f);
+            buildPlayer.updatePaint();
+        }
+
+        protected override void doShoot()
+        {
+            setState(3);
+            buildPlayer.setAction(ActionFire + Direction, -1);
+        }
+
+        protected override void shootBullets(CatCollisionArea area)
+        {
+            shootCount++;
+            CountShot(buildDef?.ID);
+            Vector3 p = base.transform.localPosition;
+            BulletManager.getInstance().addDefenseBullet(this, targetRole, p.x + area.centerX(), p.y + area.centerY(), curAngle);
+        }
+
+        bool TooClose(SpriteObject target, float x, float y)
+        {
+            var s = Spec; if (s == null || s.MinRangeCells <= 0 || target == null) return false;
+            Vector3 t = target.transform.localPosition; float dx = t.x - x, dy = t.y - y, m = s.MinRangeCells * 32f;
+            return dx * dx + dy * dy < m * m;
+        }
+
+        protected override bool canAim(SpriteObject target, float turretX, float turretY, float checkRangeSqr)
+        {
+            if (TooClose(target, turretX, turretY)) return false;
+            return base.canAim(target, turretX, turretY, checkRangeSqr);
+        }
+
+        protected override void checkTargetAvailable()
+        {
+            base.checkTargetAvailable();
+            if (state != 1 && targetRole != null && TooClose(targetRole, base.transform.localPosition.x, base.transform.localPosition.y)) doStand();
+        }
+    }
+
+    // Loads the tower's own sprite file instead of the shared B_Defense one.
+    public class EfAnim : BuildAnim_Player
+    {
+        public override void setDef(BaseBuild _build, BaseDef dat)
+        {
+            base.setDef(_build, dat);
+            string path = EfSprites.PlayerPath(dat?.ID);
+            if (path == null) { Debug.LogError("[EfTurrets] no sprite for " + dat?.ID); return; }
+            PlayerUnitls.initPlayerNode(buildPlayer, new PlayerInfo { player = path }, useURPLit: true, GameStatics.mipmapEnable);
+            resetPlayerInfo();
+            buildPlayer.setAction(correctPlayerInfo.actionId, -1);
+            repaint();
+        }
+    }
+}

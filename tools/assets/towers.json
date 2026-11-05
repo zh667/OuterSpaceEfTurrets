@@ -1,0 +1,270 @@
+{
+ "comment": "First batch: towers that reuse the game's own turret logic. ids are the B_Defense ids the mod adds. head = parts that turn, base = parts that stay. upm = game units (32 per cell) per metre; size = footprint in cells. muzzles = barrels; muzzle_mode front|top|topfront picks the visible surface farthest forward / highest / both; static = the whole tower does not turn (one picture for every direction).",
+ "elev": 50,
+ "dirs": 24,
+ "render_ppm": 256,
+ "texel_per_unit": 2,
+ "towers": [
+  {
+   "id": "7101",
+   "fam": "battle_turret_1",
+   "head": [
+    "part_02",
+    "part_03"
+   ],
+   "base": [
+    "part_01"
+   ],
+   "upm": 32,
+   "size": 2,
+   "muzzles": 2
+  },
+  {
+   "id": "7102",
+   "fam": "battle_cannon_1",
+   "head": [
+    "part_02_0",
+    "part_03_0"
+   ],
+   "base": [
+    "part_01_0"
+   ],
+   "upm": 32,
+   "size": 2,
+   "muzzles": 1
+  },
+  {
+   "id": "7201",
+   "fam": "battle_turret_2",
+   "head": [
+    "part_02",
+    "part_03"
+   ],
+   "base": [
+    "part_01"
+   ],
+   "upm": 32,
+   "size": 2,
+   "muzzles": 2
+  },
+  {
+   "id": "7301",
+   "fam": "battle_turret_3",
+   "head": [
+    "part_02",
+    "part_03"
+   ],
+   "base": [
+    "part_01"
+   ],
+   "upm": 32,
+   "size": 2,
+   "muzzles": 2
+  },
+  {
+   "id": "7302",
+   "fam": "battle_cannon_2",
+   "head": [
+    "part_02_0",
+    "part_03_0"
+   ],
+   "base": [
+    "part_01_0"
+   ],
+   "upm": 32,
+   "size": 2,
+   "muzzles": 1
+  },
+  {
+   "id": "7303",
+   "fam": "battle_sniper_1",
+   "head": [
+    "part_02_0",
+    "part_03_0"
+   ],
+   "base": [
+    "part_01_0"
+   ],
+   "upm": 32,
+   "size": 2,
+   "muzzles": 1
+  },
+  {
+   "id": "7304",
+   "fam": "battle_laser_1",
+   "head": [
+    "part_01_variant_0"
+   ],
+   "base": [],
+   "upm": 32,
+   "size": 2,
+   "muzzles": 1,
+   "muzzle_mode": "top",
+   "static": true
+  },
+  {
+   "id": "7401",
+   "fam": "battle_laser_2",
+   "head": [
+    "part_01_variant_0"
+   ],
+   "base": [],
+   "upm": 32,
+   "size": 2,
+   "muzzles": 1,
+   "muzzle_mode": "top",
+   "static": true
+  },
+  {
+   "id": "7402",
+   "fam": "battle_rocket_1",
+   "head": [
+    "part_01_0"
+   ],
+   "base": [
+    "part_02_0"
+   ],
+   "upm": 32,
+   "size": 3,
+   "muzzles": 2,
+   "muzzle_mode": "topfront"
+  },
+  {
+   "id": "7403",
+   "fam": "battle_cannon_1_dg002",
+   "head": [
+    "part_02_0",
+    "part_03_0",
+    "part_03_1"
+   ],
+   "base": [
+    "part_01_0"
+   ],
+   "upm": 21.33,
+   "size": 4,
+   "muzzles": 1
+  },
+  {
+   "id": "7103",
+   "fam": "battle_jet_1",
+   "head": [
+    "part_02_0"
+   ],
+   "base": [
+    "part_01_0"
+   ],
+   "upm": 32,
+   "size": 2,
+   "muzzles": 1
+  },
+  {
+   "id": "7202",
+   "fam": "battle_frost_1",
+   "head": [
+    "part_02_0",
+    "part_03_0"
+   ],
+   "base": [
+    "part_01_0"
+   ],
+   "upm": 32,
+   "size": 2,
+   "muzzles": 1
+  },
+  {
+   "id": "7203",
+   "fam": "battle_debuff_1",
+   "head": [
+    "part_02_0",
+    "part_03_0"
+   ],
+   "base": [
+    "part_01_0"
+   ],
+   "upm": 32,
+   "size": 2,
+   "muzzles": 1,
+   "muzzle_mode": "topfront"
+  },
+  {
+   "id": "7204",
+   "fam": "battle_lightning_1",
+   "head": [
+    "part_01_variant_0"
+   ],
+   "base": [],
+   "upm": 32,
+   "size": 2,
+   "muzzles": 1,
+   "muzzle_mode": "top",
+   "static": true
+  },
+  {
+   "id": "7205",
+   "fam": "battle_medic_1",
+   "head": [
+    "part_01_variant_0"
+   ],
+   "base": [],
+   "upm": 32,
+   "size": 2,
+   "muzzles": 1,
+   "muzzle_mode": "top",
+   "static": true
+  },
+  {
+   "id": "7305",
+   "fam": "battle_fog_1",
+   "head": [
+    "part_02_0",
+    "part_03_0"
+   ],
+   "base": [
+    "part_01_0"
+   ],
+   "upm": 32,
+   "size": 2,
+   "muzzles": 1,
+   "muzzle_mode": "topfront"
+  },
+  {
+   "id": "7306",
+   "fam": "battle_shockwave_1",
+   "head": [
+    "part_01_variant_0"
+   ],
+   "base": [],
+   "upm": 32,
+   "size": 2,
+   "muzzles": 1,
+   "muzzle_mode": "top",
+   "static": true
+  },
+  {
+   "id": "7307",
+   "fam": "battle_trap_1",
+   "head": [
+    "part_01_variant_0"
+   ],
+   "base": [],
+   "upm": 32,
+   "size": 2,
+   "muzzles": 1,
+   "muzzle_mode": "top",
+   "static": true
+  },
+  {
+   "id": "7404",
+   "fam": "battle_lightning_2",
+   "head": [
+    "part_01_variant_0"
+   ],
+   "base": [],
+   "upm": 32,
+   "size": 2,
+   "muzzles": 1,
+   "muzzle_mode": "top",
+   "static": true
+  }
+ ]
+}
