@@ -16,8 +16,11 @@ namespace EfTurrets
         public static string TestPowerId;   // when set, only this tower gets the test power
         public static readonly System.Collections.Generic.Dictionary<string, int> TestShots = new System.Collections.Generic.Dictionary<string, int>();
         public static readonly System.Collections.Generic.Dictionary<string, int> TestEffects = new System.Collections.Generic.Dictionary<string, int>();
-        public static void CountShot(string id) { if (id == null) return; TestShots.TryGetValue(id, out int n); TestShots[id] = n + 1; }
-        public static void CountEffect(string id, int k = 1) { if (id == null) return; TestEffects.TryGetValue(id, out int n); TestEffects[id] = n + k; }
+        // counted on the game's simulation thread, read by the self-test on the main thread
+        public static void CountShot(string id) { if (id == null) return; lock (TestShots) { TestShots.TryGetValue(id, out int n); TestShots[id] = n + 1; } }
+        public static void CountEffect(string id, int k = 1) { if (id == null) return; lock (TestEffects) { TestEffects.TryGetValue(id, out int n); TestEffects[id] = n + k; } }
+        public static int Shots(string id) { lock (TestShots) return TestShots.TryGetValue(id, out int n) ? n : 0; }
+        public static int Effects(string id) { lock (TestEffects) return TestEffects.TryGetValue(id, out int n) ? n : 0; }
         public BuildAnim_Player AnimPlayer => buildPlayer;
 
         public override bool isSupportElectriced() => TestPower ? (TestPowerId == null || TestPowerId == buildDef?.ID) : base.isSupportElectriced();
@@ -69,14 +72,14 @@ namespace EfTurrets
         {
             shootCount++;
             CountShot(buildDef?.ID);
-            Vector3 p = base.transform.localPosition;
+            Vector3 p = base.localPos;
             BulletManager.getInstance().addDefenseBullet(this, targetRole, p.x + area.centerX(), p.y + area.centerY(), curAngle);
         }
 
         bool TooClose(SpriteObject target, float x, float y)
         {
             var s = Spec; if (s == null || s.MinRangeCells <= 0 || target == null) return false;
-            Vector3 t = target.transform.localPosition; float dx = t.x - x, dy = t.y - y, m = s.MinRangeCells * 32f;
+            Vector3 t = target.localPos; float dx = t.x - x, dy = t.y - y, m = s.MinRangeCells * 32f;
             return dx * dx + dy * dy < m * m;
         }
 
@@ -89,7 +92,7 @@ namespace EfTurrets
         protected override void checkTargetAvailable()
         {
             base.checkTargetAvailable();
-            if (state != 1 && targetRole != null && TooClose(targetRole, base.transform.localPosition.x, base.transform.localPosition.y)) doStand();
+            if (state != 1 && targetRole != null && TooClose(targetRole, base.localPos.x, base.localPos.y)) doStand();
         }
     }
 

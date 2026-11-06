@@ -59,3 +59,23 @@ Mod for *Outer Space / 秩序：新曙光* (Steam 3080070), started from `E:/pro
 - The game's collector is not incremental (heap ~2 GB, pauses of several hundred ms): keep per-frame allocation low and
   measure before optimising (`Frames` in `Kit/SelfTestBase.cs` counts allocation and collections).
 - When the game updates (`Assembly-CSharp.dll` changes), re-check every game member the mod calls before building.
+
+## 0.3.0 (2026-11-06): game 0.9.0020, ground marks, placement preview
+- Game 0.9.0020 runs the map logic on a simulation thread (`SimThread`, on by default: `UserSaver.simThreaded`).
+  Tower `logic()` and everything it calls run there. Never touch Unity objects from it: read positions from
+  `SpriteObject.localPos` (not `transform`), use `System.Random` (not `UnityEngine.Random`), and hand effects and
+  drawing to the main thread with `MainThread.post` (`EfFx`, `EfGround` do this). Loading a prefab off the main thread
+  crashed the game natively (Player.log: `PrefabLoader.getPrefab` under `SimThread:workerLoop`). The game's own
+  `EffectManager`/`BulletManager`/`addBuild` already marshal themselves.
+- Ground marks (`src/EfGround.cs`): acid/poison pools and ice sheets made by `tools/assets/make_ground.py` from the
+  game's terrain pictures, scorch = the game's `img/groundburn.png`. Drawn like the game's burn layer: a `TextureDrawer`
+  under `MapManager.mapEventManager` (created with `PlatformTools.setPresent`, or the camera culls it), sorting
+  MAP_GROUP/MAP_GROUP_EFFECT, `Light2DWorldLightUtility.SetWorldLight(material, true)` so night darkens them.
+  Packaged pictures are in `v_common/Resources/Textures`.
+- Placement preview: mod buildings with an icon are previewed by `BuildPlanMod`, which turns the icon by the build
+  direction (2 = 180 degrees, the menu's default). `EfPlacement` keeps the mod's towers at direction 1.
+- The game's dark smoke/sphere hits (`bomb/Plasma_Big`, `bomb/Laser_Big`, `Eff_Defense/effects/bomb/Laser_Big`) read as
+  black blots on light ground; do not repeat them.
+- Power: a tower links itself to a power line, generator or battery within 7 cells (game rule, same for the game's
+  turrets); unlinked towers do nothing (`--tests power`).
+- Test modes: `ground` (marks around a tower), `plan` (preview in four directions + the menu preview), `power`.

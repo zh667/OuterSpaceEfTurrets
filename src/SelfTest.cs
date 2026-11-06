@@ -29,7 +29,7 @@ namespace EfTurrets
         }
         string monsterId;
 
-        protected override string HeartbeatText() => "placed=" + placed.Count + " shots=" + EfTurret.TestShots.Values.Sum();
+        protected override string HeartbeatText() => "placed=" + placed.Count + " shots=" + EfData.Towers.Sum(t => EfTurret.Shots(t.Id));
 
         protected override IEnumerator RunTests()
         {
@@ -40,6 +40,9 @@ namespace EfTurrets
             if (req.tests == "defs") yield break;
 
             if (req.tests == "techtree") { yield return Guard(TechTree(), "tech tree"); yield break; }
+            if (req.tests == "ground") { yield return Guard(Ground(), "ground marks"); yield break; }
+            if (req.tests == "plan") { yield return Guard(Plan(), "placement preview"); yield break; }
+            if (req.tests == "power") { yield return Guard(Power(), "power"); yield break; }
             if (req.tests == "fxgallery" || req.tests == "fxgallery2") { yield return Guard(FxGallery(), "fx gallery"); yield break; }
             EfTurret.TestPower = true;
             CloseDialogs();
@@ -67,7 +70,8 @@ namespace EfTurrets
                 yield return Guard(Fight(t), "fight " + t.buildDef.ID);
             }
             yield return Guard(Medic(), "medic");
-            result.checks.Add(new Check { name = "game effects", info = true, passed = true, summary = "played " + EfFx.Spawned + ", still timed at the end " + EfFx.Live });
+            result.checks.Add(new Check { name = "game effects", info = true, passed = true, summary = "played " + EfFx.Spawned + ", still timed at the end " + EfFx.Live + "; ground marks " + EfGround.Added + ", still on the ground " + EfGround.Live });
+            result.checks.Add(new Check { name = "ground marks", passed = EfGround.Added > 0, summary = EfGround.Added + " marks laid (acid, poison, ice, scorch)" });
             SetClock(0f);
             yield return Shot("end");
         }
@@ -246,8 +250,8 @@ namespace EfTurrets
             var c = new Check { name = "fight " + s.Id + " " + s.Name };
             result.checks.Add(c);
             if (monsterId == null) { c.summary = "no monster kind"; yield break; }
-            int shots0 = EfTurret.TestShots.TryGetValue(s.Id, out var v) ? v : 0;
-            int effects0 = EfTurret.TestEffects.TryGetValue(s.Id, out var e0) ? e0 : 0;
+            int shots0 = EfTurret.Shots(s.Id);
+            int effects0 = EfTurret.Effects(s.Id);
             var spawned = new List<FWMonsterBean>();
             int dist = Math.Max(s.MinRangeCells + 3, Math.Min(s.Range - 4, 10));
             EfTurret.TestPowerId = s.Id;
@@ -271,7 +275,7 @@ namespace EfTurrets
             while (Time.realtimeSinceStartup - t0 < 14)
             {
                 yield return null;
-                int shotsNow = EfTurret.TestShots.TryGetValue(s.Id, out var vv) ? vv : 0;
+                int shotsNow = EfTurret.Shots(s.Id);
                 if (!shotTaken && shotsNow > shots0 && Time.realtimeSinceStartup - t0 > 2)
                 {
                     shotTaken = true; CloseDialogs();
@@ -294,14 +298,14 @@ namespace EfTurrets
             SetClock(0f);
             EfTurret.TestPowerId = "-";
             float hp1 = HpOf(spawned);
-            int shots = (EfTurret.TestShots.TryGetValue(s.Id, out var v2) ? v2 : 0) - shots0;
+            int shots = EfTurret.Shots(s.Id) - shots0;
             if (!shotTaken) yield return Shot("fight-" + s.Id);
             Locked(() =>
             {
                 foreach (var m in MapManager.getInstance().monsterManager.getMonsters().ToList())
                     if (spawned.Contains(m.monsterBean)) GMCommand.getInstance().Monster_RemoveMoster(m);
             });
-            int effects = (EfTurret.TestEffects.TryGetValue(s.Id, out var e2) ? e2 : 0) - effects0;
+            int effects = EfTurret.Effects(s.Id) - effects0;
             // the player's people join the fight, so lost health alone does not prove the tower did it: special towers
             // count what they did themselves (hits, pushes, slows, stuns); bullet towers count shots and lost health
             c.passed = shots > 0 && (s.Kind == null ? hp1 < hp0 : effects > 0);
@@ -408,6 +412,157 @@ namespace EfTurrets
             }
             SetClock(0f);
             c.summary = k + " effects shown";
+        }
+
+        // Placement preview: the same tower planned in the four building directions (left to right 1..4), then the
+        // preview the build menu makes (direction 2) after one frame of EfPlacement.
+        IEnumerator Plan()
+        {
+            var c = new Check { name = "placement preview stays upright" }; result.checks.Add(c);
+            CloseDialogs();
+            short cx = -1, cy = -1; var dirGraphs = new List<BasePlanGraph>();
+            Locked(() =>
+            {
+                var f = MapManager.getInstance().heroManager.getAllianceFaction(1); if (f != null) foreach (var h in f.getRoles()) if (h != null) people.Add(new Vector2(h.cellX, h.cellY));
+                var def = ImplDef<F_DefenseDef>.getDataID("7101");
+                if (!FindFreeArea(26, 8, used, def, new Dictionary<string, int>(), out int x0, out int y0)) return;
+                cx = (short)(x0 + 3); cy = (short)(y0 + 4);
+                for (sbyte d = 1; d <= 4; d++) dirGraphs.Add(PlanCreator.createTempPlanGraph(10009, 10, "7101", (short)(cx + (d - 1) * 6), cy, d));
+            });
+            if (cx < 0) { c.summary = "no free patch"; yield break; }
+            var look = new Vector2(MapTools.cellX2PosCanter((short)(cx + 9)), MapTools.cellY2PosCanter(cy));
+            for (int i = 0; i < 6; i++)
+            {
+                // moving a preview (as the mouse does) makes the game repaint it with its direction
+                int k = i;
+                Locked(() =>
+                {
+                    CamearControl.getInstance().moveTowardsMapPoint(look, 1f);
+                    for (int j = 0; j < dirGraphs.Count; j++) { dirGraphs[j].setCell((short)(cx + j * 6 + (k % 2)), cy); TurnPreview(dirGraphs[j]); }
+                });
+                yield return new WaitForSecondsRealtime(0.25f);
+            }
+            CloseDialogs();
+            yield return Shot("plan-dirs");
+            BasePlanGraph g = null; sbyte before = 0, after = 0;
+            Locked(() =>
+            {
+                LocalCoreHandle.Plan_CacheClear_LN();
+                g = PlanCreator.createTempPlanGraph(10009, 10, "7101", (short)(cx + 9), cy, 2);
+                before = g.getBuildDir();
+                MapManager.getInstance().controlManager.controlBuild.setClickGraph(g);
+            });
+            yield return new WaitForSecondsRealtime(1f);
+            after = g != null ? g.getBuildDir() : (sbyte)0;
+            for (int i = 0; i < 4; i++) { int k = i; Locked(() => { CamearControl.getInstance().moveTowardsMapPoint(look, 1f); g?.setCell((short)(cx + 9 + (k % 2)), cy); if (g != null) TurnPreview(g); }); yield return new WaitForSecondsRealtime(0.25f); }
+            after = g != null ? g.getBuildDir() : (sbyte)0;
+            CloseDialogs();
+            yield return new WaitForSecondsRealtime(0.3f);
+            yield return Shot("plan-fixed");
+            Locked(() => MapManager.getInstance().controlManager.controlBuild.reset());
+            c.passed = after == EfPlacement.Upright;
+            c.summary = "plan-dirs: directions 1..4 left to right; build menu preview direction " + before + " -> " + after + " (upright = " + EfPlacement.Upright + ")";
+        }
+
+        // Ground marks of every kind around a tower, for a screenshot.
+        IEnumerator Ground()
+        {
+            var c = new Check { name = "ground marks show", info = true, passed = true }; result.checks.Add(c);
+            CloseDialogs();
+            EfTurret t = null;
+            Locked(() =>
+            {
+                var f = MapManager.getInstance().heroManager.getAllianceFaction(1); if (f != null) foreach (var h in f.getRoles()) if (h != null) people.Add(new Vector2(h.cellX, h.cellY));
+                var def = ImplDef<F_DefenseDef>.getDataID("7203");
+                if (!FindFreeArea(20, 14, used, def, new Dictionary<string, int>(), out int x0, out int y0)) return;
+                short cx = (short)(x0 + 10), cy = (short)(y0 + 7);
+                t = UserBean.getInstance().curStarMap.addBuild(BuildGenerator.createBean_Defend(def, 1, "7203", cx, cy, 0), cx, cy, 0) as EfTurret;
+                if (t == null) return;
+                CamearControl.getInstance().moveFollow((SpriteObject)t);
+                Vector2 p = EfCombat.Pos(t); float cell = EfCombat.Cell;
+                EfGround.Add("acid", p + new Vector2(-6 * cell, 3 * cell), 2.5f * cell, 30f);
+                EfGround.Add("poison", p + new Vector2(6 * cell, 3 * cell), 3f * cell, 30f);
+                EfGround.Add("frost", p + new Vector2(-6 * cell, -4 * cell), 2.5f * cell, 30f);
+                EfGround.Add("burn", p + new Vector2(6 * cell, -4 * cell), 1.3f * cell, 30f);
+                EfGround.Add("burn", p + new Vector2(8 * cell, -4 * cell), 1.3f * cell, 30f);
+                EfGround.Add("burn", p + new Vector2(0, -6 * cell), 1.5f * cell, 30f);
+            });
+            if (t == null) { c.summary = "no patch"; yield break; }
+            SetClock(1f);
+            var look = EfCombat.Pos(t);
+            for (int i = 0; i < 6; i++) { Locked(() => CamearControl.getInstance().moveTowardsMapPoint(look, 1f)); yield return new WaitForSecondsRealtime(0.25f); }
+            CloseDialogs();
+            yield return new WaitForSecondsRealtime(0.3f);
+            yield return Shot("ground");
+            SetClock(0f);
+            c.summary = "acid top left, poison top right, ice bottom left, scorch bottom right and below; live " + EfGround.Live;
+        }
+
+        // What the game does when the mouse moves a preview: BuildPlanMod.casePaint turns the icon by the direction.
+        static void TurnPreview(BasePlanGraph g)
+        {
+            var f = typeof(BasePlanGraph).GetField("tripBuild", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            var trip = f?.GetValue(g) as BuildPlanBase; if (trip == null) return;
+            trip.casePaint(); trip.repaint();
+        }
+
+        // Power: one of the mod's towers and one of the game's own turrets on a patch with no power line, generator or
+        // battery within 12 cells, monsters in range, no test power. Neither may fire.
+        IEnumerator Power()
+        {
+            var c = new Check { name = "towers do nothing without power" }; result.checks.Add(c);
+            EfTurret.TestPower = false; EfTurret.TestPowerId = null;
+            CloseDialogs();
+            Locked(() => { var f = MapManager.getInstance().heroManager.getAllianceFaction(1); if (f != null) foreach (var h in f.getRoles()) if (h != null) people.Add(new Vector2(h.cellX, h.cellY)); });
+            Run(PickMonster);
+            EfTurret mine = null; Defense_BaseTurret vanilla = null; short cx = -1, cy = -1;
+            Locked(() =>
+            {
+                var spread = UserBean.getInstance().curStarMap;
+                var def = ImplDef<F_DefenseDef>.getDataID("7101"); var vdef = ImplDef<F_DefenseDef>.getDataID("10");
+                var why = new Dictionary<string, int>();
+                for (int tries = 0; tries < 60; tries++)
+                {
+                    if (!FindFreeArea(12, 8, used, def, why, out int x0, out int y0)) break;
+                    used.Add(new[] { x0, y0, 12, 8 });
+                    var near = MapManager.getInstance().buildManager.electricManager.getMainElectric(x0 - 12, y0 - 12, x0 + 24, y0 + 20);
+                    if (near != null && near.Count > 0) continue;
+                    cx = (short)(x0 + 3); cy = (short)(y0 + 4);
+                    mine = spread.addBuild(BuildGenerator.createBean_Defend(def, 1, "7101", cx, cy, 0), cx, cy, 0) as EfTurret;
+                    vanilla = spread.addBuild(BuildGenerator.createBean_Defend(vdef, 1, "10", (short)(cx + 5), cy, 0), (short)(cx + 5), cy, 0) as Defense_BaseTurret;
+                    break;
+                }
+            });
+            if (mine == null || vanilla == null) { c.summary = "no patch away from power (mine " + (mine != null) + ", game's " + (vanilla != null) + ")"; yield break; }
+            var shootField = typeof(Defense_BaseTurret).GetField("shootCount", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+            Func<Defense_BaseTurret, int> shots = t => shootField != null ? Convert.ToInt32(shootField.GetValue(t)) : -1;
+            SetClock(1f);
+            yield return new WaitForSecondsRealtime(2f);
+            var spawned = new List<FWMonsterBean>();
+            int mine0 = 0, van0 = 0;
+            Locked(() =>
+            {
+                mine0 = shots(mine); van0 = shots(vanilla);
+                for (int a = 0; a < 360 && spawned.Count < 3; a += 30)
+                {
+                    short mx = (short)(cx + 2 + (int)Math.Round(7 * Math.Cos(a * Math.PI / 180))), my = (short)(cy + (int)Math.Round(7 * Math.Sin(a * Math.PI / 180)));
+                    if (CellProblem(mx, my, null) != null) continue;
+                    spawned.Add(GMCommand.getInstance().Monster_AddMoster(monsterId, 2, mx, my));
+                }
+                CamearControl.getInstance().moveFollow((SpriteObject)mine);
+            });
+            yield return new WaitForSecondsRealtime(8f);
+            CloseDialogs();
+            yield return Shot("power");
+            SetClock(0f);
+            string State(Defense_BaseTurret t) { var e = (Defense_BaseInElectric)t; return "linked " + e.isLinkElectric() + ", powered " + e.isSupportElectriced() + ", use " + t.buildDef.getElectricConsume_Run() + ", shots " + (shots(t) - (t == mine ? mine0 : van0)); }
+            c.details.Add("mod tower 7101 at " + cx + "," + cy + ": " + State(mine));
+            c.details.Add("game turret 10 at " + (cx + 5) + "," + cy + ": " + State(vanilla));
+            c.details.Add(spawned.Count + " monsters 7 cells away");
+            int m = shots(mine) - mine0, v = shots(vanilla) - van0;
+            Locked(() => { foreach (var r in MapManager.getInstance().monsterManager.getMonsters().ToList()) if (spawned.Contains(r.monsterBean)) GMCommand.getInstance().Monster_RemoveMoster(r); });
+            c.passed = spawned.Count > 0 && !mine.isSupportElectriced() && m == 0;
+            c.summary = "unpowered mod tower fired " + m + " times, unpowered game turret " + v + " times";
         }
 
         // Opens the game's tech tree centred on each of the mod's nodes and takes a screenshot (cards and lines must

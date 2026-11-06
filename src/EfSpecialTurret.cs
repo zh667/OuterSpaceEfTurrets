@@ -34,7 +34,7 @@ namespace EfTurrets
                 if (areas != null && areas.Length > 0)
                 {
                     attacked = true;
-                    Vector3 pos = base.transform.localPosition;
+                    Vector3 pos = base.localPos;
                     try { Attack(new Vector2(pos.x + areas[0].centerX(), pos.y + areas[0].centerY())); }
                     catch (Exception e) { Debug.LogWarning("[EfTurrets] attack " + buildDef?.ID + ": " + e.Message); }
                 }
@@ -91,6 +91,7 @@ namespace EfTurrets
                     for (int i = 0; i < 3; i++) { int k = i; After(0.08f * k, () => Fire(muzzle, targetRole ?? t)); }
                     After(Flight(muzzle, tp), () =>
                     {
+                        for (int i = 1; i <= 3; i++) EfFx.Particle(EfFx.EmpBurst, muzzle + dir * (dist * i / 3f), 0f, 1.2f);
                         EfCombat.Enemies(this, enemies);
                         foreach (var r in EfCombat.InBand(enemies, muzzle, dir, s.Range * cell, s.Radius * cell))
                         {
@@ -110,6 +111,8 @@ namespace EfTurrets
                         After(when, () => EfFx.Particle(EfFx.FlameBlob, at, ang));
                     }
                     After(0.3f, () => EfFx.Particle(EfFx.FlameHit, muzzle + dir * len, ang));
+                    // the ground it swept stays scorched for a while (the game's own burn mark)
+                    for (int i = 1; i <= 3; i++) { Vector2 at = muzzle + dir * (len * (0.25f + 0.25f * i)); After(0.1f * i, () => EfGround.Add("burn", at, cell * 1.3f, 8f)); }
                     flameDir = dir;
                     lasting.zones.Add(new EfLasting.Zone { kind = "flame", at = muzzle, radius = len, left = 0.75f, tick = 0f });
                     break;
@@ -117,6 +120,14 @@ namespace EfTurrets
                 case "wave":
                 {
                     EfFx.Particle(EfFx.EmpBurst, EfCombat.Pos(this), 0f, 1.5f);
+                    // the wave front: shock bursts marching out over the sector
+                    for (int ring = 1; ring <= 3; ring++)
+                        for (int side = -1; side <= 1; side++)
+                        {
+                            float a = (ang + side * 25f) * Mathf.Deg2Rad, r = s.Range * cell * (0.3f * ring);
+                            Vector2 at = EfCombat.Pos(this) + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r;
+                            After(0.08f * ring, () => EfFx.Particle(EfFx.EmpBurst, at, 0f, 1.2f));
+                        }
                     EfCombat.Enemies(this, enemies);
                     foreach (var r in EfCombat.InSector(enemies, EfCombat.Pos(this), dir, s.Range * cell, 40f))
                         if (EfCombat.Stun(r, s.Duration)) { EfFx.Particle(EfFx.PlasmaBurst, EfCombat.Pos(r)); CountEffect(buildDef.ID); }
@@ -138,7 +149,11 @@ namespace EfTurrets
                         cur = next;
                     }
                     if (s.Kind == "charge")
-                        After(Flight(muzzle, tp), () => lasting.zones.Add(new EfLasting.Zone { kind = "orb", at = tp, radius = 1.5f * cell, left = s.Duration, tick = 0f }));
+                        After(Flight(muzzle, tp), () =>
+                        {
+                            lasting.zones.Add(new EfLasting.Zone { kind = "orb", at = tp, radius = 1.5f * cell, left = s.Duration, tick = 0f });
+                            EfGround.Add("burn", tp, 1.5f * cell, s.Duration + 3f);
+                        });
                     break;
                 }
                 case "frost":
@@ -160,6 +175,8 @@ namespace EfTurrets
             {
                 case "frost":
                     lasting.zones.Add(new EfLasting.Zone { kind = "ice", at = at, radius = radius, left = s.Duration, tick = 0f });
+                    EfGround.Add("frost", at, radius, s.Duration + 1.5f);
+                    EfFx.Particle(EfFx.EmpBurst, at, 0f, 1.2f);
                     EfCombat.Enemies(this, enemies);
                     foreach (var r in EfCombat.InRadius(enemies, at, radius)) CountEffect(buildDef.ID);   // slowed by the shell itself (Drag)
                     break;
@@ -167,9 +184,13 @@ namespace EfTurrets
                     EfFx.Particle(EfFx.AcidHit, at); EfFx.Particle(EfFx.AcidHit, at + new Vector2(24, 10)); EfFx.Particle(EfFx.AcidHit, at + new Vector2(-22, -8));
                     EfCombat.Enemies(this, enemies);
                     foreach (var r in EfCombat.InRadius(enemies, at, radius)) { lasting.Mark(r, "corrode", s.Duration); CountEffect(buildDef.ID); }
+                    // the acid stays on the ground as a pool; whatever walks through it is corroded too
+                    lasting.zones.Add(new EfLasting.Zone { kind = "acid", at = at, radius = radius, left = s.PoolSeconds, tick = EfLasting.Tick });
+                    EfGround.Add("acid", at, radius, s.PoolSeconds + 1.5f);
                     break;
                 case "poison":
                     lasting.zones.Add(new EfLasting.Zone { kind = "poison", at = at, radius = radius, left = s.Duration, tick = 0f });
+                    EfGround.Add("poison", at, radius, s.Duration + 1.5f);
                     break;
             }
         }
@@ -195,6 +216,7 @@ namespace EfTurrets
                             }
                             break;
                         case "orb": foreach (var r in EfCombat.InRadius(enemies, z.at, z.radius)) { EfCombat.Damage(this, r, s.TickAtk); CountEffect(buildDef.ID); } break;
+                        case "acid": foreach (var r in EfCombat.InRadius(enemies, z.at, z.radius)) { lasting.Mark(r, "corrode", s.Duration); CountEffect(buildDef.ID); } break;
                         case "flame":
                             foreach (var r in EfCombat.InBand(enemies, z.at, flameDir, z.radius, s.Radius * EfCombat.Cell))
                             {
@@ -211,8 +233,9 @@ namespace EfTurrets
                     switch (z.kind)
                     {
                         case "ice": EfFx.Particle(EfFx.EmpBurst, z.at + Jitter(z.radius * 0.5f), 0f, 1.2f); z.fxTick = 0.6f; break;
-                        case "poison": EfFx.Particle(EfFx.ToxicBurst, z.at + Jitter(z.radius * 0.6f)); z.fxTick = 0.45f; break;
-                        case "orb": EfFx.Particle(EfFx.ElectricSphere, z.at); z.fxTick = 0.6f; break;
+                        // (the game's dark smoke bursts read as black blots on light ground: the pool shows the poison)
+                        case "orb": EfFx.Particle(EfFx.PlasmaBurst, z.at + Jitter(z.radius * 0.3f)); z.fxTick = 0.4f; break;
+                        case "acid": EfFx.Particle(EfFx.AcidHit, z.at + Jitter(z.radius * 0.5f)); z.fxTick = 0.7f; break;
                         default: z.fxTick = 99f; break;
                     }
                 }
@@ -236,7 +259,7 @@ namespace EfTurrets
             }
         }
 
-        static Vector2 Jitter(float r) => new Vector2(UnityEngine.Random.Range(-r, r), UnityEngine.Random.Range(-r * 0.7f, r * 0.7f));
+        static Vector2 Jitter(float r) => new Vector2(EfFx.Rand(-r, r), EfFx.Rand(-r * 0.7f, r * 0.7f));
 
         // Heals the player's people and repairs the player's buildings within range (the game's heal crosses).
         void Medic()
