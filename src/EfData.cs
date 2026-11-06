@@ -14,7 +14,7 @@ namespace EfTurrets
         public int MinRangeCells;   // mortar: no shots closer than this (game cells)
         // special towers (EfSpecialTurret); Kind null = the game's own bullets
         public string Kind;
-        public float Radius, Duration, Slow, SlowSeconds = 1f, Vulnerable = 1f, Heal, Repair;   // Radius in cells
+        public float PoolSeconds = 6f, Radius, Duration, Slow, SlowSeconds = 1f, Vulnerable = 1f, Heal, Repair;   // Radius in cells
         public int PushCells, Bounces, TickAtk;
         // the game bullet the tower fires (Eff_Defense/effects/<...>; null keeps the template's), its flight and native effects
         public string Bullet, Muzzle, Hit; public float BulletSpeed = -1f, Drag = -1f, Shocktime = -1f;
@@ -87,7 +87,7 @@ namespace EfTurrets
                 Hp = 3500, Atk = 10, Range = 14, Distance = 16, Reload = 4f, Radius = 2.5f, Duration = 3f, Slow = 0.6f, SlowSeconds = 2f,
                 Consume = "120", Workload = 40, Bullet = "bullets\\Plasma_Big", Muzzle = "muzzle\\Missile", Hit = "bomb\\Laser", AimType = 3, Accuracy = "0", BulletSpeed = 14f, DamageRange = 160, Drag = 0.6f, Shocktime = 4f, Materials = "12_60_30|12_24_10|12_61_4|12_29_1" },
             new TowerSpec { Id = "7203", Template = "40", Tier = 2, Tech = "ef-def-2", Name = "“酸洗”", SortId = 62, Kind = "acid",
-                Desc = "投射酸液罐，范围伤害，并腐蚀敌人：15 秒内受到的伤害提高 30%。",
+                Desc = "投射酸液罐，范围伤害，落点留下一摊酸液 6 秒。被溅到或踩进酸液的敌人被腐蚀：15 秒内受到的伤害提高 30%。",
                 Hp = 3500, Atk = 60, Range = 15, Distance = 17, Reload = 5f, Radius = 2.5f, Duration = 15f, Vulnerable = 1.3f,
                 Consume = "120", Workload = 40, Bullet = "bullets\\Missile", Muzzle = "muzzle\\Missile", Hit = "-1", AimType = 3, Accuracy = "0", BulletSpeed = 14f, DamageRange = 160, Materials = "12_60_30|12_24_12|12_29_1" },
             new TowerSpec { Id = "7204", Template = "51", Tier = 2, Tech = "ef-surge-2", Name = "电涌塔", SortId = 63, Kind = "chain",
@@ -99,7 +99,7 @@ namespace EfTurrets
                 Hp = 3000, Atk = 0, Range = 8, Distance = 8, Reload = 5f, Heal = 0.2f, Repair = 0.1f, Consume = "120", Workload = 40,
                 Materials = "12_60_20|12_29_2|12_24_8" },
             new TowerSpec { Id = "7305", Template = "42", Tier = 3, Tech = "ef-chem-3", Name = "“毒沼”", SortId = 64, Kind = "poison",
-                Desc = "投射毒剂罐，落点形成毒雾 5 秒。敌人中毒持续掉血并减速，离开毒雾后仍持续 5 秒。",
+                Desc = "投射毒剂罐，落点形成一片毒沼 5 秒。敌人中毒持续掉血并减速，离开毒沼后仍持续 5 秒。",
                 Hp = 5000, Atk = 20, TickAtk = 20, Range = 16, Distance = 18, Reload = 5f, Radius = 3f, Duration = 5f, Slow = 0.5f, SlowSeconds = 1f,
                 Consume = "150", Workload = 50, Bullet = "bullets\\Plasma_Big", Muzzle = "muzzle\\Missile", Hit = "bomb\\Plasma_Big", AimType = 3, Accuracy = "0", BulletSpeed = 14f, DamageRange = 192, Drag = 0.5f, Shocktime = 2f, Materials = "12_65_25|12_20_15|12_37_2" },
             new TowerSpec { Id = "7306", Template = "52", Tier = 3, Tech = "ef-chem-3", Name = "全向声波塔", SortId = 65, Kind = "wave",
@@ -113,7 +113,7 @@ namespace EfTurrets
             new TowerSpec { Id = "7404", Template = "53", Tier = 4, Tech = "ef-ray-4", Name = "甲二型“电荷”", SortId = 63, Kind = "charge",
                 Desc = "释放强电弧并在目标处留下电球。电弧最多弹射 4 次；电球持续 5 秒，灼伤周围的敌人。",
                 Hp = 10000, Atk = 110, TickAtk = 30, Range = 14, Distance = 16, Reload = 4f, Radius = 3f, Bounces = 4, Duration = 5f,
-                Consume = "250", Workload = 60, Bullet = "bullets\\Plasma_Big", Muzzle = "muzzle\\Plasma_Big", Hit = "bomb\\Laser_Big", AimType = 2, Accuracy = "0", BulletSpeed = 36f, Materials = "12_65_20|12_39_12|12_35_2|12_38_3" },
+                Consume = "250", Workload = 60, Bullet = "bullets\\Plasma_Big", Muzzle = "muzzle\\Plasma_Big", Hit = "bomb\\Plasma", AimType = 2, Accuracy = "0", BulletSpeed = 36f, Materials = "12_65_20|12_39_12|12_35_2|12_38_3" },
         };
 
         // Tech nodes sit next to the game's own nodes of the same level. Positions come from tools/tech_layout.py, a

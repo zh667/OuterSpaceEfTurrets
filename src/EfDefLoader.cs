@@ -16,6 +16,7 @@ namespace EfTurrets
         public override void initModDef()
         {
             Report.Clear();
+            try { EfGround.Dir = System.IO.Path.Combine(cfg.getVersionPath("Resources"), "Textures"); /* where tools/build.py puts pictures */ } catch (Exception e) { Debug.LogError("[EfTurrets] textures: " + e); }
             try { EfSprites.Prepare(cfg); } catch (Exception e) { Debug.LogError("[EfTurrets] sprites: " + e); }
             try { AddTowers(); } catch (Exception e) { Debug.LogError("[EfTurrets] towers: " + e); }
             try { AddTechs(); } catch (Exception e) { Debug.LogError("[EfTurrets] techs: " + e); }

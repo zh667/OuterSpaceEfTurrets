@@ -22,8 +22,23 @@ namespace EfTurrets
         public const string GroundFire = "Eff_Groung/Fire/Fire";                      // small burning flames (loops)
         public static int Spawned;   // test counter
 
+        // The map logic (and with it the towers) runs on the game's simulation thread since 0.9.0020; effects are
+        // Unity objects, so calls from there are handed to the main thread (MainThread.post, as the game's own
+        // EffectManager does). Loading a prefab off the main thread crashes the game.
+        static bool OffMain(Action a)
+        {
+            if (MainThread.onMain) return false;
+            MainThread.post(a);
+            return true;
+        }
+
+        static readonly System.Random rng = new System.Random();
+        public static float Rand(float a, float b) { lock (rng) return a + (float)rng.NextDouble() * (b - a); }
+        public static int Rand(int n) { lock (rng) return rng.Next(n); }
+
         public static void Game(AnimPlayerID.Glo id, Vector2 at)
         {
+            if (OffMain(() => Game(id, at))) return;
             try { EffectManager.getInstance()?.addEffect_Global(id, 1, at.x, at.y); Spawned++; }
             catch (Exception e) { Debug.LogWarning("[EfTurrets] game fx: " + e.Message); }
         }
@@ -42,6 +57,7 @@ namespace EfTurrets
         // removed after 'life' seconds (weather prefabs such as Cloud/cloud1 need their weather and must not be used).
         public static void Particle(string path, Vector2 at, float angle = 0f, float life = 2f)
         {
+            if (OffMain(() => Particle(path, at, angle, life))) return;
             try
             {
                 var prefab = Prefab(path); var em = EffectManager.getInstance(); if (prefab == null || em == null) return;

@@ -16,7 +16,9 @@ namespace EfTurrets
     {
         public const float Cell = 32f;
 
-        public static Vector2 Pos(SpriteObject o) { var p = o.transform.localPosition; return new Vector2(p.x, p.y); }
+        // localPos: the position the game keeps for its simulation thread (0.9.0020 runs the map logic off the main
+        // thread, where Unity objects such as transforms must not be touched)
+        public static Vector2 Pos(SpriteObject o) { var p = o.localPos; return new Vector2(p.x, p.y); }
 
         public static bool Alive(BaseRole r) => r != null && r.roleBean != null && !r.roleBean.isDead() && !r.roleBean.isFallDown();
 
