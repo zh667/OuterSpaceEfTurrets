@@ -85,7 +85,7 @@ Mod for *Outer Space / 秩序：新曙光* (Steam 3080070), started from `E:/pro
   second = shots x damage / reload (both sides ignore the fire animation), range, HP, power. Up to about 30% above the
   game is fine; more needs a reason (size, short range).
 - Ranges: the game's shortest turret range is 15 cells and enemy guns reach 18-20 (pistols), 24-28 (SMGs), 35-38
-  (rifles), 45-50 (snipers, rockets) (`T_Weapon.Range`). Only the flamethrower (12) and the medic (10) stay below 14;
+  (rifles), 45-50 (snipers, rockets) (`T_Weapon.Range`). Only the medic (10) stays below 14 (the flamethrower: 15);
   lobbed area towers sit at 22-26 (the game's missile turret: 30).
 - 0.3.1 changes: ranges of jet 14, frost 22, acid 24, chain 18, medic 10, grenade 22, high-explosive 26, poison 26,
   wave 16, flame 12, charge 20; "Downpour" 52 per shot (was 70); high-explosive 80 per shell, reload 4 s (was 130,
@@ -117,3 +117,7 @@ Mod for *Outer Space / 秩序：新曙光* (Steam 3080070), started from `E:/pro
   NaN for "keep the position" puts the camera at NaN (black screen).
 - Test modes: `dps` (damage per second against standing monsters, the game's turrets for comparison), `fxpreview`
   (close-up sequences of the special towers), `fxlab` (calibration grid), `fxmats` (materials inside the game's prefabs).
+- AF1's flame (0.4.1, after user feedback): a continuous stream of the game's flamethrower bullets (Spue/Bullet, moved
+  by `EfFx.Lob` with no arc) from the nozzles to the end of the range, 17 of them over 0.6 s, plus a glow and smoke
+  (`EfLooks.Flame`). The same picture copied as an 8-frame flipbook into EfPuffs came out faint. Range 15 cells, band
+  2.4 cells wide.
