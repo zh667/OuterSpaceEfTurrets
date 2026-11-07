@@ -485,7 +485,7 @@ namespace EfTurrets
             EfTurret.TestPowerId = id;
             int shots0 = EfTurret.Shots(id);
             var spawned = new List<FWMonsterBean>();
-            int dist = id == "7307" ? 6 : 8;
+            int dist = id == "7307" ? 10 : 8;
             Locked(() =>
             {
                 foreach (int dy in new[] { 0, 1, -1 })

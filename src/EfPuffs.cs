@@ -11,7 +11,7 @@ namespace EfTurrets
     // Everything runs on the main thread (calls from the simulation thread are posted) and on the game clock.
     public static class EfPuffs
     {
-        public enum Tex { Smoke, Smoke2, Glow, Spark, Ring, Crackle }
+        public enum Tex { Smoke, Smoke2, Glow, Spark, Ring, Crackle, Fire }
         static readonly Dictionary<Tex, KeyValuePair<string, string>> Source = new Dictionary<Tex, KeyValuePair<string, string>>
         {
             { Tex.Smoke, new KeyValuePair<string, string>("Eff_Bullets/effects/laser/Laser Hit 1", "smokePuff") },     // realistic puff
@@ -20,16 +20,19 @@ namespace EfTurrets
             { Tex.Spark, new KeyValuePair<string, string>("Eff_Defense/effects/bomb/Missile_Big", "spark") },          // spark dot
             { Tex.Ring, new KeyValuePair<string, string>("Eff_Bullets/effects/laser/Laser Hit 1", "laser_impulse_wave") }, // shock ring
             { Tex.Crackle, new KeyValuePair<string, string>("Eff_Bullets/effects/plasma/Plasma Hit", "core") },        // plasma crackle
+            { Tex.Fire, new KeyValuePair<string, string>("Eff_Bullets/effects/Spue/Bullet", "SpueBullet") },           // flamethrower flipbook (a row of frames)
         };
-        static readonly HashSet<Tex> Additive = new HashSet<Tex> { Tex.Glow, Tex.Spark, Tex.Ring, Tex.Crackle };
+        static readonly HashSet<Tex> Additive = new HashSet<Tex> { Tex.Glow, Tex.Spark, Tex.Ring, Tex.Crackle, Tex.Fire };
+        // flipbooks: a row of square frames played over the puff's life; white = keep the picture's own colours
+        static readonly HashSet<Tex> Flipbook = new HashSet<Tex> { Tex.Fire };
 
-        class Puff { public string key; public Vector2 pos, vel; public float s0, s1, life, age, a, rise; }
-        class Emitter { public Tex tex; public Color c; public Vector2 at; public float radius, rate, left, acc, life, s0, s1, rise, a; }
+        class Puff { public string key, draw; public int frames; public Vector2 pos, vel; public float s0, s1, life, age, a, rise; }
+        class Emitter { public Tex tex; public Color c; public Vector2 at, dir; public float radius, rate, left, acc, life, s0, s1, rise, a, speed, spread; }
 
         static readonly List<Puff> puffs = new List<Puff>();
         static readonly List<Emitter> emitters = new List<Emitter>();
         static readonly Dictionary<Tex, Texture2D> gray = new Dictionary<Tex, Texture2D>();
-        static readonly Dictionary<string, Texture2D> tinted = new Dictionary<string, Texture2D>();
+        static readonly Dictionary<string, Texture2D[]> tinted = new Dictionary<string, Texture2D[]>();
         static readonly Dictionary<string, TextureDrawer> drawers = new Dictionary<string, TextureDrawer>();
         static GameObject root; static MapManager owner;
         static readonly System.Random rng = new System.Random();
@@ -44,8 +47,8 @@ namespace EfTurrets
         public static void One(Tex t, Color c, Vector2 at, Vector2 vel, float s0, float s1, float life, float a, float rise = 0f)
         {
             if (OffMain(() => One(t, c, at, vel, s0, s1, life, a, rise))) return;
-            string key = Key(t, c); if (Drawer(key, t, c) == null) return;
-            puffs.Add(new Puff { key = key, pos = at, vel = vel, s0 = s0, s1 = s1, life = Mathf.Max(0.05f, life), a = a, rise = rise });   // no spin: the drawer turns a quad about its corner, not its centre
+            string key = Key(t, c); var frames = Tinted(t, c, key); if (frames == null || Drawer(key, 0, frames) == null) return;
+            puffs.Add(new Puff { key = key, draw = key + "#0", frames = frames.Length, pos = at, vel = vel, s0 = s0, s1 = s1, life = Mathf.Max(0.05f, life), a = a, rise = rise });   // no spin: the drawer turns a quad about its corner, not its centre
         }
 
         // n puffs bursting out of 'at' at up to 'speed'
@@ -64,6 +67,16 @@ namespace EfTurrets
             if (OffMain(() => Emit(t, c, at, radius, rate, seconds, life, s0, s1, rise, a))) return;
             emitters.Add(new Emitter { tex = t, c = c, at = at, radius = radius, rate = rate, left = seconds, life = life, s0 = s0, s1 = s1, rise = rise, a = a, acc = 1f });
         }
+
+        // a jet (flame, water): puffs leaving 'from' along 'dir' within +-spread degrees for 'seconds', fast enough to
+        // reach 'length' within their life against the drag (the stream ends where the tower's hits end)
+        public static void Spray(Tex t, Color c, Vector2 from, Vector2 dir, float length, float spread, float rate, float seconds, float life, float s0, float s1, float a)
+        {
+            if (OffMain(() => Spray(t, c, from, dir, length, spread, rate, seconds, life, s0, s1, a))) return;
+            float speed = length * Drag / (1f - Mathf.Exp(-Drag * life));
+            emitters.Add(new Emitter { tex = t, c = c, at = from, dir = dir.normalized, speed = speed, spread = spread, rate = rate, left = seconds, life = life, s0 = s0, s1 = s1, a = a, acc = 1f });
+        }
+        const float Drag = 1.2f;   // velocity *= 1 - Drag*dt
 
         // a ring growing from r0 to r1 (radius, map units) and fading
         public static void Ring(Color c, Vector2 at, float r0, float r1, float life, float a) => One(Tex.Ring, c, at, Vector2.zero, r0 * 2f, r1 * 2f, life, a);
@@ -96,34 +109,50 @@ namespace EfTurrets
             gray[t] = g; return g;
         }
 
-        static Texture2D Tinted(Tex t, Color c, string key)
+        // the recoloured picture, one texture per frame (one frame unless a flipbook)
+        static Texture2D[] Tinted(Tex t, Color c, string key)
         {
             if (tinted.TryGetValue(key, out var x)) return x;
             var g = Gray(t); if (g == null) { tinted[key] = null; return null; }
-            var px = g.GetPixels32(); bool add = Additive.Contains(t);
+            var px = g.GetPixels32(); bool add = Additive.Contains(t), raw = c.r >= 0.99f && c.g >= 0.99f && c.b >= 0.99f && Flipbook.Contains(t);
             for (int i = 0; i < px.Length; i++)
             {
                 var p = px[i]; float lum = Mathf.Max(p.r, Mathf.Max(p.g, p.b)) / 255f;
                 float a = add ? lum * (p.a / 255f) : p.a / 255f;
+                if (raw)   // keep the picture's colours, at full brightness (the alpha carries the brightness)
+                {
+                    float k = lum > 0.004f ? 1f / lum : 0f;
+                    px[i] = new Color32((byte)Mathf.Min(255, p.r * k), (byte)Mathf.Min(255, p.g * k), (byte)Mathf.Min(255, p.b * k), (byte)(Mathf.Clamp01(a) * 255));
+                    continue;
+                }
                 float shade = add ? 1f : 0.55f + 0.45f * lum;   // smoke keeps its light and shadow, glows are flat colour
                 px[i] = new Color32((byte)(c.r * shade * 255), (byte)(c.g * shade * 255), (byte)(c.b * shade * 255), (byte)(Mathf.Clamp01(a) * 255));
             }
-            x = new Texture2D(g.width, g.height, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
-            x.SetPixels32(px); x.Apply(false, true);
+            int n = Flipbook.Contains(t) && g.width >= g.height * 2 ? g.width / g.height : 1, fw = g.width / n;
+            x = new Texture2D[n];
+            for (int f = 0; f < n; f++)
+            {
+                var part = new Color32[fw * g.height];
+                for (int yy = 0; yy < g.height; yy++) Array.Copy(px, yy * g.width + f * fw, part, yy * fw, fw);
+                x[f] = new Texture2D(fw, g.height, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+                x[f].SetPixels32(part); x[f].Apply(false, true);
+            }
             tinted[key] = x; return x;
         }
 
-        static TextureDrawer Drawer(string key, Tex t, Color c)
+        static TextureDrawer Drawer(string key, int frame, Texture2D[] frames)
         {
             var em = EffectManager.getInstance(); var mm = MapManager.getInstance(); if (em == null || mm == null) return null;
             if (root == null || owner != mm) { puffs.Clear(); emitters.Clear(); drawers.Clear(); owner = mm; root = PlatformTools.setPresent(em.gameObject, new GameObject("EfPuffs")); }
-            if (drawers.TryGetValue(key, out var d) && d != null) return d;
-            var tex = Tinted(t, c, key); if (tex == null) return null;
+            string dk = key + "#" + frame;
+            if (drawers.TryGetValue(dk, out var d) && d != null) return d;
+            var tex = frames[frame]; if (tex == null) return null;
             d = PlatformTools.createGameObject<TextureDrawer>(root);
             d.init(); d.setTexture(tex);
             d.setSorting(FairySortingLayerConfig.getLayerSystemId(SortingDef.LAYERS.Effect), SortingDef.Effect_Eff);
-            drawers[key] = d; return d;
+            drawers[dk] = d; textures[dk] = tex; return d;
         }
+        static readonly Dictionary<string, Texture2D> textures = new Dictionary<string, Texture2D>();
 
         // Called every frame (ModBehaviour.Update).
         public static void Update()
@@ -136,8 +165,15 @@ namespace EfTurrets
                 var e = emitters[i]; e.left -= dt; e.acc += dt * e.rate;
                 while (e.acc >= 1f)
                 {
-                    e.acc -= 1f; float ang = R(0, 6.283f), rr = Mathf.Sqrt(R(0, 1)) * e.radius;
-                    Vector2 p = e.at + new Vector2(Mathf.Cos(ang) * rr, Mathf.Sin(ang) * rr * 0.75f);
+                    e.acc -= 1f;
+                    if (e.speed > 0f)   // a jet
+                    {
+                        float ang = Mathf.Atan2(e.dir.y, e.dir.x) + R(-e.spread, e.spread) * Mathf.Deg2Rad, sp = e.speed * R(0.9f, 1.03f);
+                        One(e.tex, e.c, e.at, new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * sp, e.s0, e.s1, e.life * R(0.9f, 1.05f), e.a);
+                        continue;
+                    }
+                    float a0 = R(0, 6.283f), rr = Mathf.Sqrt(R(0, 1)) * e.radius;
+                    Vector2 p = e.at + new Vector2(Mathf.Cos(a0) * rr, Mathf.Sin(a0) * rr * 0.75f);
                     One(e.tex, e.c, p, new Vector2(R(-3, 3), e.rise), e.s0, e.s1, e.life, e.a);
                 }
                 if (e.left <= 0) emitters.RemoveAt(i);
@@ -146,19 +182,22 @@ namespace EfTurrets
             {
                 var p = puffs[i]; p.age += dt;
                 if (p.age >= p.life) { puffs.RemoveAt(i); continue; }
-                p.vel.y += p.rise * dt; p.vel *= 1f - Mathf.Min(0.9f, 1.2f * dt);
+                p.vel.y += p.rise * dt; p.vel *= 1f - Mathf.Min(0.9f, Drag * dt);
                 p.pos += p.vel * dt;
+                int f = p.frames > 1 ? Mathf.Min(p.frames - 1, (int)(p.age / p.life * p.frames)) : 0;
+                p.draw = p.key + "#" + f;
+                if (f > 0 && !drawers.ContainsKey(p.draw)) Drawer(p.key, f, tinted[p.key]);
             }
             foreach (var kv in drawers)
             {
                 var d = kv.Value; if (d == null) continue;
-                bool any = false; foreach (var p in puffs) if (p.key == kv.Key) { any = true; break; }
+                bool any = false; foreach (var p in puffs) if (p.draw == kv.Key) { any = true; break; }
                 if (d.gameObject.activeSelf != any) d.gameObject.SetActive(any);
                 if (!any) continue;
-                var tex = tinted[kv.Key]; float w = tex.width;
+                var tex = textures[kv.Key]; float w = tex.width;
                 foreach (var p in puffs)
                 {
-                    if (p.key != kv.Key) continue;
+                    if (p.draw != kv.Key) continue;
                     float u = p.age / p.life;
                     float a = p.a * Mathf.Clamp01(u / 0.12f) * Mathf.Clamp01((1f - u) / 0.5f);
                     float s = Mathf.Lerp(p.s0, p.s1, Mathf.Sqrt(u)) / w;

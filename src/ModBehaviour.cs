@@ -6,7 +6,7 @@ namespace EfTurrets
     // the mod only ages its effects and ground marks and keeps the placement preview upright. The self-test starts here when the isolated test asks for it.
     public class ModBehaviour : MonoBehaviour
     {
-        public const string Version = "0.4.1";
+        public const string Version = "0.4.2";
         public static ModBehaviour Instance;
 
         void Awake()
