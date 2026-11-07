@@ -127,16 +127,53 @@ namespace EfTurrets
             return dx * dx + dy * dy < m * m;
         }
 
+        // No line-of-sight check (0.4.3). The game skips a target when the line to it crosses a cell that blocks bullets,
+        // and every turret blocks (B_Defense BulletPassable 0): in a row of towers the ones behind never saw a monster
+        // beating on the end of the row. The rest is the game's canAim / checkTargetAvailable unchanged; the shot itself
+        // is not affected (BulletManager only lets cover right next to the target take a bullet, and turrets have
+        // Penetration 0).
         protected override bool canAim(SpriteObject target, float turretX, float turretY, float checkRangeSqr)
         {
-            if (TooClose(target, turretX, turretY)) return false;
-            return base.canAim(target, turretX, turretY, checkRangeSqr);
+            if (target == null || TooClose(target, turretX, turretY)) return false;
+            if (target is BaseHero hero)
+            {
+                if (hero.heroBean.isFallDown() || hero.heroBean.isDead() || hero.heroBean.isBuffing_休克()) return false;
+            }
+            else if (target is BaseAnimal || target is BaseMonster)
+            {
+                var r = (BaseRole)target;
+                if (r.roleBean.isFallDown() || r.roleBean.isDead() || !RoleAlliance.isHostileAlliance(this, target)) return false;
+            }
+            else if (target is Defense_BaseTurret)
+            {
+                if (!RoleAlliance.isHostileAlliance(this, target)) return false;
+            }
+            else return false;
+            Vector3 t = target.localPos;
+            float dx = turretX - t.x, dy = turretY - t.y;
+            if (dx * dx + dy * dy >= checkRangeSqr) return false;
+            doAim(target);
+            return true;
         }
 
         protected override void checkTargetAvailable()
         {
-            base.checkTargetAvailable();
-            if (state != 1 && targetRole != null && TooClose(targetRole, base.localPos.x, base.localPos.y)) doStand();
+            var t = targetRole;
+            if (t == null || !AliveForTurret(t)) { doStand(); return; }
+            float range = defenseBean.getDef().Range;
+            var c = t.getColliderRect();
+            Vector3 p = base.localPos;
+            float dx = p.x - c.centleX(), dy = p.y - c.centleY();
+            if (dx * dx + dy * dy >= range * range) { doStand(); return; }
+            if (state != 1 && TooClose(t, p.x, p.y)) doStand();
+        }
+
+        static bool AliveForTurret(SpriteObject t)
+        {
+            if (t is BaseRole r && (r.roleBean.isDead() || r.roleBean.isFallDown())) return false;
+            if (t is BaseHero h && h.heroBean.isBuffing_休克()) return false;
+            if (t is BaseBuild b && b.buildBean.isDead()) return false;
+            return true;
         }
     }
 
