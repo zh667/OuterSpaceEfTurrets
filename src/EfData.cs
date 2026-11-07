@@ -18,6 +18,9 @@ namespace EfTurrets
         public int PushCells, Bounces, TickAtk;
         // the game bullet the tower fires (Eff_Defense/effects/<...>; null keeps the template's), its flight and native effects
         public string Bullet, Muzzle, Hit; public float BulletSpeed = -1f, Drag = -1f, Shocktime = -1f;
+        // launchers drawn at several tilts (towers.json "pitch", degrees per level); they aim up to the launch angle of
+        // the mod's own shell arc: PitchMin at point blank, PitchMax at full range
+        public int[] Pitch; public float PitchMin = 15f, PitchMax = 60f;
     }
 
     public class TechSpec
@@ -31,16 +34,17 @@ namespace EfTurrets
     public static class EfData
     {
         public const string UnlockPrefix = "9";   // tech unlock item id = "9" + tower id
+        static readonly int[] Tilt = { 0, 10, 20, 30, 40, 50, 60 };   // the pitch levels rendered for the launchers
 
         public static readonly List<TowerSpec> Towers = new List<TowerSpec>
         {
             new TowerSpec { Id = "7101", Template = "10", Tier = 1, Tech = "ef-def-1", Name = "铳械塔", SortId = 60,
-                Desc = "基础自动炮塔，双管交替连射能量弹，压制轻装步兵。",
+                Desc = "基础自动炮塔，双管交替连射动能弹，压制轻装步兵。",
                 Hp = 2000, Atk = 44, MaxBullet = 4, Reload = 3.5f, Range = 24, Distance = 29, Consume = "80", Workload = 30,
                 Materials = "12_6_25|12_15_30|12_16_40|12_58_4" },
             new TowerSpec { Id = "7102", Template = "30", Tier = 1, Tech = "ef-def-1", Name = "榴弹塔", SortId = 61,
                 Desc = "发射榴弹，落点小范围爆炸，适合对付成群的敌人。",
-                Hp = 2500, Atk = 75, DamageRange = 64, MaxBullet = 1, Reload = 2.4f, Range = 18, Distance = 22, Consume = "150", Workload = 45,
+                Hp = 2500, Atk = 75, DamageRange = 64, MaxBullet = 1, Reload = 2.4f, Range = 22, Distance = 26, Consume = "150", Workload = 45,
                 Materials = "12_16_30|12_58_3|12_59_2|12_25_1" },
             new TowerSpec { Id = "7201", Template = "11", Tier = 2, Tech = "ef-def-2", Name = "扩装铳械塔", SortId = 60,
                 Desc = "加装弹仓的铳械塔，射程和威力都有提升。",
@@ -48,11 +52,11 @@ namespace EfTurrets
                 Materials = "12_60_40|12_61_8|12_24_10" },
             new TowerSpec { Id = "7301", Template = "12", Tier = 3, Tech = "ef-def-3", Name = "“暴雨”铳械塔", SortId = 60,
                 Desc = "铳械塔的顶级型号，每轮六连射，火力密集。",
-                Hp = 4500, Atk = 70, MaxBullet = 6, Reload = 3.4f, Range = 28, Distance = 33, Consume = "120", Workload = 50,
+                Hp = 4500, Atk = 52, MaxBullet = 6, Reload = 3.4f, Range = 28, Distance = 33, Consume = "120", Workload = 50,
                 Materials = "12_65_30|12_38_3|12_41_1|12_20_10" },
             new TowerSpec { Id = "7302", Template = "32", Tier = 3, Tech = "ef-def-3", Name = "高爆榴弹塔", SortId = 61,
                 Desc = "装填高爆榴弹，爆炸范围更大，每轮两发。",
-                Hp = 5000, Atk = 130, DamageRange = 96, MaxBullet = 2, Reload = 2.6f, Range = 20, Distance = 24, Consume = "150", Workload = 50,
+                Hp = 5000, Atk = 80, DamageRange = 96, MaxBullet = 2, Reload = 4f, Range = 26, Distance = 30, Consume = "150", Workload = 50,
                 Materials = "12_65_25|12_20_30|12_41_1" },
             new TowerSpec { Id = "7303", Template = "22", Tier = 3, Tech = "ef-def-3", Name = "哨戒塔", SortId = 62,
                 Desc = "远程精确射击，单发威力大，优先击杀高价值目标。",
@@ -68,7 +72,7 @@ namespace EfTurrets
                 Materials = "12_65_20|12_39_15|12_35_3|12_38_2" },
             new TowerSpec { Id = "7402", Template = "43", Tier = 4, Tech = "ef-heavy-4", Name = "重锤迫击炮", SortId = 61, Size = 3,
                 Desc = "超远程曲射重炮，炮弹落点大范围爆炸。太近的目标打不到。",
-                Hp = 6000, Atk = 160, DamageRange = 160, MaxBullet = 1, Reload = 6f, Rotation = 60f, Range = 40, Distance = 46,
+                Hp = 6000, Atk = 60, DamageRange = 160, MaxBullet = 1, Reload = 6f, Rotation = 60f, Range = 40, Distance = 46,
                 AimType = 3, Consume = "300", Workload = 70, MinRangeCells = 8,
                 Materials = "12_65_40|12_39_20|12_41_2|12_42_4" },
             new TowerSpec { Id = "7403", Template = "33", Tier = 4, Tech = "ef-heavy-4", Name = "序章炮塔", SortId = 62, Size = 4,
@@ -80,40 +84,40 @@ namespace EfTurrets
             // second batch: effects written by the mod (EfSpecialTurret)
             new TowerSpec { Id = "7103", Template = "30", Tier = 1, Tech = "ef-def-1", Name = "激流塔", SortId = 62, Kind = "jet",
                 Desc = "喷出高压水流，把前方的敌人推开，不造成伤害。体型巨大的敌人推不动。",
-                Hp = 2500, Atk = 0, Range = 10, Distance = 12, Reload = 4f, Radius = 1.6f, PushCells = 3, Consume = "100", Workload = 35,
+                Hp = 2500, Atk = 0, Range = 14, Distance = 16, Reload = 4f, Radius = 1.6f, PushCells = 3, Consume = "100", Workload = 35,
                 Bullet = "bullets\\Plasma", Muzzle = "muzzle\\Laser_Big", Hit = "-1", AimType = 2, Accuracy = "0", BulletSpeed = 22f, Materials = "12_16_30|12_15_20|12_58_4|12_59_1" },
-            new TowerSpec { Id = "7202", Template = "40", Tier = 2, Tech = "ef-def-2", Name = "液氮塔", SortId = 61, Kind = "frost",
+            new TowerSpec { Id = "7202", Template = "40", Tier = 2, Tech = "ef-def-2", Name = "液氮塔", SortId = 61, Kind = "frost", Pitch = Tilt,
                 Desc = "投射液氮罐，落点结成冰面，冰面上的敌人大幅减速。不造成伤害。",
-                Hp = 3500, Atk = 10, Range = 14, Distance = 16, Reload = 4f, Radius = 2.5f, Duration = 3f, Slow = 0.6f, SlowSeconds = 2f,
+                Hp = 3500, Atk = 10, Range = 22, Distance = 25, Reload = 4f, Radius = 2.5f, Duration = 3f, Slow = 0.6f, SlowSeconds = 2f,
                 Consume = "120", Workload = 40, Bullet = "bullets\\Plasma_Big", Muzzle = "muzzle\\Missile", Hit = "bomb\\Laser", AimType = 3, Accuracy = "0", BulletSpeed = 14f, DamageRange = 160, Drag = 0.6f, Shocktime = 4f, Materials = "12_60_30|12_24_10|12_61_4|12_29_1" },
-            new TowerSpec { Id = "7203", Template = "40", Tier = 2, Tech = "ef-def-2", Name = "“酸洗”", SortId = 62, Kind = "acid",
+            new TowerSpec { Id = "7203", Template = "40", Tier = 2, Tech = "ef-def-2", Name = "“酸洗”", SortId = 62, Kind = "acid", Pitch = Tilt,
                 Desc = "投射酸液罐，范围伤害，落点留下一摊酸液 6 秒。被溅到或踩进酸液的敌人被腐蚀：15 秒内受到的伤害提高 30%。",
-                Hp = 3500, Atk = 60, Range = 15, Distance = 17, Reload = 5f, Radius = 2.5f, Duration = 15f, Vulnerable = 1.3f,
+                Hp = 3500, Atk = 25, Range = 24, Distance = 27, Reload = 5f, Radius = 2.5f, Duration = 15f, Vulnerable = 1.3f,
                 Consume = "120", Workload = 40, Bullet = "bullets\\Missile", Muzzle = "muzzle\\Missile", Hit = "-1", AimType = 3, Accuracy = "0", BulletSpeed = 14f, DamageRange = 160, Materials = "12_60_30|12_24_12|12_29_1" },
             new TowerSpec { Id = "7204", Template = "51", Tier = 2, Tech = "ef-surge-2", Name = "电涌塔", SortId = 63, Kind = "chain",
                 Desc = "发射电弧，命中目标后在附近的敌人之间弹射，最多弹射 3 次。",
-                Hp = 5000, Atk = 60, Range = 12, Distance = 14, Reload = 3f, Radius = 3f, Bounces = 3, Consume = "150", Workload = 40,
-                Bullet = "bullets\\Laser", Muzzle = "muzzle\\Laser", Hit = "bomb\\Plasma", AimType = 2, Accuracy = "0", BulletSpeed = 40f, Materials = "12_60_20|12_56_6|12_29_2|12_22_4" },
+                Hp = 5000, Atk = 60, Range = 18, Distance = 21, Reload = 3f, Radius = 3f, Bounces = 3, Consume = "150", Workload = 40,
+                Bullet = "bullets\\Laser", Muzzle = "muzzle\\Laser", Hit = "-1", AimType = 2, Accuracy = "0", BulletSpeed = 40f, Materials = "12_60_20|12_56_6|12_29_2|12_22_4" },
             new TowerSpec { Id = "7205", Template = "11", Tier = 2, Tech = "ef-def-2", Name = "医疗塔", SortId = 64, Kind = "medic",
                 Desc = "每 5 秒为范围内的己方人员恢复 20% 生命，并修复受损建筑 10% 耐久。",
-                Hp = 3000, Atk = 0, Range = 8, Distance = 8, Reload = 5f, Heal = 0.2f, Repair = 0.1f, Consume = "120", Workload = 40,
+                Hp = 3000, Atk = 0, Range = 10, Distance = 10, Reload = 5f, Heal = 0.2f, Repair = 0.1f, Consume = "120", Workload = 40,
                 Materials = "12_60_20|12_29_2|12_24_8" },
-            new TowerSpec { Id = "7305", Template = "42", Tier = 3, Tech = "ef-chem-3", Name = "“毒沼”", SortId = 64, Kind = "poison",
+            new TowerSpec { Id = "7305", Template = "42", Tier = 3, Tech = "ef-chem-3", Name = "“毒沼”", SortId = 64, Kind = "poison", Pitch = Tilt,
                 Desc = "投射毒剂罐，落点形成一片毒沼 5 秒。敌人中毒持续掉血并减速，离开毒沼后仍持续 5 秒。",
-                Hp = 5000, Atk = 20, TickAtk = 20, Range = 16, Distance = 18, Reload = 5f, Radius = 3f, Duration = 5f, Slow = 0.5f, SlowSeconds = 1f,
+                Hp = 5000, Atk = 20, TickAtk = 5, Range = 26, Distance = 29, Reload = 5f, Radius = 3f, Duration = 5f, Slow = 0.5f, SlowSeconds = 1f,
                 Consume = "150", Workload = 50, Bullet = "bullets\\Plasma_Big", Muzzle = "muzzle\\Missile", Hit = "bomb\\Plasma_Big", AimType = 3, Accuracy = "0", BulletSpeed = 14f, DamageRange = 192, Drag = 0.5f, Shocktime = 2f, Materials = "12_65_25|12_20_15|12_37_2" },
             new TowerSpec { Id = "7306", Template = "52", Tier = 3, Tech = "ef-chem-3", Name = "全向声波塔", SortId = 65, Kind = "wave",
                 Desc = "向目标方向发出扇形声波，使范围内的敌人眩晕 2 秒，不造成伤害。大型敌人不受影响。",
-                Hp = 6000, Atk = 0, Range = 12, Distance = 14, Reload = 5f, Duration = 2f, Consume = "150", Workload = 50,
+                Hp = 6000, Atk = 0, Range = 16, Distance = 18, Reload = 5f, Duration = 2f, Consume = "150", Workload = 50,
                 Materials = "12_65_20|12_38_2|12_29_4" },
             new TowerSpec { Id = "7307", Template = "32", Tier = 3, Tech = "ef-def-3", Name = "AF1“熔甲者”", SortId = 66, Kind = "flame",
                 Desc = "近距离喷射火焰，持续灼烧前方的所有敌人。",
-                Hp = 6000, Atk = 45, Range = 8, Distance = 9, Reload = 3f, Radius = 1.6f, Consume = "150", Workload = 50,
+                Hp = 6000, Atk = 45, Range = 12, Distance = 13, Reload = 3f, Radius = 1.6f, Consume = "150", Workload = 50,
                 Materials = "12_65_25|12_20_20|12_18_30" },
             new TowerSpec { Id = "7404", Template = "53", Tier = 4, Tech = "ef-ray-4", Name = "甲二型“电荷”", SortId = 63, Kind = "charge",
                 Desc = "释放强电弧并在目标处留下电球。电弧最多弹射 4 次；电球持续 5 秒，灼伤周围的敌人。",
-                Hp = 10000, Atk = 110, TickAtk = 30, Range = 14, Distance = 16, Reload = 4f, Radius = 3f, Bounces = 4, Duration = 5f,
-                Consume = "250", Workload = 60, Bullet = "bullets\\Plasma_Big", Muzzle = "muzzle\\Plasma_Big", Hit = "bomb\\Plasma", AimType = 2, Accuracy = "0", BulletSpeed = 36f, Materials = "12_65_20|12_39_12|12_35_2|12_38_3" },
+                Hp = 10000, Atk = 70, TickAtk = 10, Range = 20, Distance = 23, Reload = 4f, Radius = 3f, Bounces = 4, Duration = 5f,
+                Consume = "250", Workload = 60, Bullet = "bullets\\Plasma_Big", Muzzle = "muzzle\\Plasma_Big", Hit = "-1", AimType = 2, Accuracy = "0", BulletSpeed = 36f, Materials = "12_65_20|12_39_12|12_35_2|12_38_3" },
         };
 
         // Tech nodes sit next to the game's own nodes of the same level. Positions come from tools/tech_layout.py, a

@@ -1,12 +1,17 @@
 # Runs inside Blender (background). Renders one tower: the turning parts in N directions and the fixed parts once,
 # colour + normal pass, orthographic camera at a fixed elevation. Also writes where the muzzles land in each image.
-# blender -b <tower.blend> --python bl_dirs.py -- <outdir> <elev> <ndirs> <ppm> <head,objs> <base,objs|->
+# blender -b <tower.blend> --python bl_dirs.py -- <outdir> <elev> <ndirs> <ppm> <head,objs> <base,objs|-> [<pitch,objs>@<deg,deg,...>]
+# Pitch: the listed head parts (a launcher on its fork) also tilt up about the horizontal axis through the first one's
+# origin (its trunnion); every direction is rendered at each angle, level first (d00..), then d00_p1.. for the others.
 import bpy, sys, math, os, json
 from mathutils import Vector, Matrix
 from bpy_extras.object_utils import world_to_camera_view
 a = sys.argv[sys.argv.index("--") + 1:]
 out, elev, nd, ppm = a[0], float(a[1]), int(a[2]), float(a[3])
 heads = a[4].split(","); bases = [] if a[5] == "-" else a[5].split(",")
+pitch_names, pitch_deg = [], [0.0]
+if len(a) > 6 and a[6] != "-":
+    pn, pd = a[6].split("@"); pitch_names = pn.split(","); pitch_deg = [float(x) for x in pd.split(",")]
 os.makedirs(out, exist_ok=True); sc = bpy.context.scene
 for o in list(bpy.data.objects):
     if o.type in ("LIGHT", "CAMERA"): bpy.data.objects.remove(o)
@@ -19,6 +24,10 @@ R0 = Matrix.Rotation(math.pi, 4, 'Z')            # the source models face -Y; tu
 for o in H + B: o.matrix_world = R0 @ o.matrix_world
 for o in H: mw0[o.name] = o.matrix_world.copy()
 bpy.context.view_layer.update()
+P = [meshes[n] for n in pitch_names]
+pivot = P[0].matrix_world.translation.copy() if P else Vector((0, 0, 0))
+def pitch_m(deg):   # tilt about the axis across the barrel (x) through the trunnion; positive = muzzle up
+    return Matrix.Translation(pivot) @ Matrix.Rotation(math.radians(deg), 4, 'X') @ Matrix.Translation(-pivot)
 # muzzles: front-most vertices of the turning parts, one or two clusters across the barrel axis
 vs = [o.matrix_world @ v.co for o in H for v in o.data.vertices]
 ymax = max(v.y for v in vs); front = [v for v in vs if v.y > ymax - 0.06]
@@ -86,16 +95,22 @@ def render(objs, name, modes=("rgb", "nrm")):
 info = {"elev": elev, "ppm": ppm, "px": px, "ortho": ortho, "ground_origin": proj(Vector((0, 0, 0))),
         "recoil_px_per_m": [proj(Vector((0, -1, 0)))[i] - proj(Vector((0, 0, 0)))[i] for i in (0, 1)], "dirs": []}
 if B: render(B, "base")
-for k in range(nd):
-    yaw = -360.0 / nd * k
-    Rk = Matrix.Rotation(math.radians(yaw), 4, 'Z')
-    for o in H: o.matrix_world = Rk @ mw0[o.name]
-    bpy.context.view_layer.update()
-    back = Rk @ Vector((0, -1, 0))
-    info["dirs"].append({"k": k, "yaw": yaw, "muzzles": [proj(Rk @ m) for m in mz],
-                         "recoil_px_per_m": [proj(back)[i] - proj(Vector((0, 0, 0)))[i] for i in (0, 1)]})
-    f3 = Rk @ Vector((0, 1, 0)); fvec.inputs[0].default_value = f3.x; fvec.inputs[1].default_value = f3.y; fvec.inputs[2].default_value = 0.0
-    render(H, "d%02d" % k, ("rgb", "nrm", "fwd", "up"))
-    with open(os.path.join(out, "progress.txt"), "w") as f: f.write("%d/%d\n" % (k + 1, nd))
+info["pitch"] = pitch_deg; info["pdirs"] = []
+for j, deg in enumerate(pitch_deg):
+    Pm = pitch_m(deg); rows = []
+    for k in range(nd):
+        yaw = -360.0 / nd * k
+        Rk = Matrix.Rotation(math.radians(yaw), 4, 'Z')
+        for o in H: o.matrix_world = Rk @ (Pm if o in P else Matrix.Identity(4)) @ mw0[o.name]
+        bpy.context.view_layer.update()
+        back = Rk @ Pm.to_3x3().to_4x4() @ Vector((0, -1, 0))
+        name = "d%02d" % k if j == 0 else "d%02d_p%d" % (k, j)
+        rows.append({"k": k, "name": name, "yaw": yaw, "pitch": deg, "muzzles": [proj(Rk @ ((Pm @ m) if P else m)) for m in mz],
+                     "recoil_px_per_m": [proj(back)[i] - proj(Vector((0, 0, 0)))[i] for i in (0, 1)]})
+        f3 = Rk @ Pm.to_3x3().to_4x4() @ Vector((0, 1, 0)); fvec.inputs[0].default_value = f3.x; fvec.inputs[1].default_value = f3.y; fvec.inputs[2].default_value = f3.z
+        render(H, name, ("rgb", "nrm", "fwd", "up"))
+        with open(os.path.join(out, "progress.txt"), "w") as f: f.write("%d/%d\n" % (j * nd + k + 1, nd * len(pitch_deg)))
+    if j == 0: info["dirs"] = rows
+    else: info["pdirs"].append(rows)
 json.dump(info, open(os.path.join(out, "info.json"), "w"), indent=1)
 print("DONE", out, px)

@@ -1,6 +1,6 @@
 # Runs ON WINDOWS. Makes the ground marks the special towers leave (acid pool, poison pool, ice sheet) from the
 # game's own terrain pictures: the swamp ground (map_6_rainswamp) gives the liquid its grain, the frozen water
-# (map_13_Water) gives the ice its marbling. Each mark is an irregular pool with a damp rim around it, a lighter
+# (map_13_Water) gives the ice its marbling. Acid and poison are near-round pools, the ice an irregular sheet; each with a damp rim around it, a lighter
 # edge where the liquid meets the ground, and a soft sheen from the top left (the light of the game's sprites).
 #   python tools/assets/make_ground.py [preview]  -> local/gen/Textures/ef_ground_<kind>_<n>.png (256 x 256)
 # 'preview' also lays them on a few of the game's grounds at game scale: local/shots/ground_preview.jpg
@@ -18,7 +18,7 @@ VARIANTS = 3
 KINDS = {
     #          grain texture            deep colour       edge colour       damp rim        alpha  bubbles
     "acid":   ("map_6_rainswamp",      (104, 124, 26),   (156, 172, 58),   (46, 50, 20),   0.86, 0),
-    "poison": ("map_6_rainswamp",      (56, 30, 76),     (112, 74, 134),   (34, 24, 44),   0.86, 0),
+    "poison": ("map_6_rainswamp",      (118, 62, 158),   (178, 128, 208),  (70, 46, 86),   0.84, 0),
     "frost":  ("map_13_Water",         (150, 196, 218),  (222, 240, 250), (112, 146, 168), 0.84, 0),
 }
 
@@ -59,10 +59,19 @@ def pool_shape(rng, jagged):
     return field
 
 
+def round_shape(rng):
+    # a pool that a shell leaves: nearly round, the edge only slightly wavy (user 11-07: the blob shapes looked wrong)
+    yy, xx = np.mgrid[0:N, 0:N].astype(np.float32)
+    xx = xx / (N - 1) * 2 - 1; yy = yy / (N - 1) * 2 - 1
+    ang = np.arctan2(yy, xx); r = np.hypot(xx, yy)
+    wob = sum(rng.uniform(.004, .012) * np.sin(k * ang + rng.uniform(0, 6.283)) for k in (2, 3, 4, 6, 9))
+    return smooth(.80, .52, r + wob) + (fbm(rng) - .5) * .06
+
+
 def make(kind, seed):
     tex, deep, rim, damp, alpha, bubbles = KINDS[kind]
     rng = np.random.default_rng(seed)
-    field = pool_shape(rng, kind == "frost")
+    field = pool_shape(rng, True) if kind == "frost" else round_shape(rng)
     inside = smooth(.40, .46, field)                       # the pool, a soft but clear edge
     depth = blur(inside, 10) * inside                      # 0 at the edge, 1 in the middle
     halo = np.clip(blur(smooth(.30, .40, field), 6) - inside, 0, 1)   # damp ground just outside

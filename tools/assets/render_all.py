@@ -13,7 +13,8 @@ for t in spec["towers"]:
         print("skip", t["id"]); continue
     t0 = time.time()
     r = subprocess.run([BL, "-b", os.path.join(SRC, t["fam"] + ".blend"), "--python", os.path.join(HERE, "bl_dirs.py"), "--",
-                        out, str(spec["elev"]), str(1 if t.get("static") else spec["dirs"]), str(spec["render_ppm"]), ",".join(t["head"]), ",".join(t["base"]) or "-"],
+                        out, str(spec["elev"]), str(1 if t.get("static") else spec["dirs"]), str(spec["render_ppm"]), ",".join(t["head"]), ",".join(t["base"]) or "-",
+                        (",".join(t["pitch"]["parts"]) + "@" + ",".join(str(x) for x in t["pitch"]["deg"])) if t.get("pitch") else "-"],
                        capture_output=True, text=True, encoding="utf-8", errors="replace", creationflags=0x08000000, timeout=7200)
     ok = [l for l in r.stdout.splitlines() if l.startswith("DONE")]
     print(t["id"], t["fam"], "rc", r.returncode, ok, "%.0fs" % (time.time() - t0), flush=True)
