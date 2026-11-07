@@ -6,7 +6,8 @@ namespace EfTurrets
     // (Defense_BaseTurret, driven by the cloned table row); only the picture and the muzzle are different:
     // the head is not rotated, the frame for the nearest of 24 directions is drawn instead, and the muzzle marks
     // in that frame are already in screen position.
-    // Sprite layout (make_assets.py): action 1 = base, 2+d = firing towards d, 26+d = idle towards d.
+    // Sprite layout (make_assets.py): action 1 = base, 2+d = firing towards d, 26+d = idle towards d; launchers with
+    // pitch levels (TowerSpec.Pitch) add 50+(j-1)*48+d = firing and 74+(j-1)*48+d = idle at level j.
     public class EfTurret : Defense_BaseTurret
     {
         public const int ActionBase = 1, ActionFire = 2, ActionIdle = 26, Directions = 24;
@@ -53,19 +54,62 @@ namespace EfTurrets
 
         public float Angle => curAngle;
 
+        // Launchers (TowerSpec.Pitch): level when idle; while aiming they tilt up to the launch angle for the target's
+        // distance at PitchSpeed and only fire once they are there. The picture is the nearest rendered level.
+        public float Pitch;
+        public const float PitchSpeed = 90f;
+        public float PitchFor(Vector2 from, Vector2 to)
+        {
+            var s = Spec; if (s?.Pitch == null) return 0f;
+            float r = Mathf.Max(32f, s.Range * 32f);
+            return Mathf.Lerp(s.PitchMin, s.PitchMax, Mathf.Clamp01((to - from).magnitude / r));
+        }
+        int PitchLevel
+        {
+            get
+            {
+                var p = Spec?.Pitch; if (p == null || p.Length < 2) return 0;
+                return Mathf.Clamp(Mathf.RoundToInt(Pitch / (p[1] - p[0])), 0, p.Length - 1);
+            }
+        }
+        int IdleAction(int d) { int j = PitchLevel; return j == 0 ? ActionIdle + d : 74 + (j - 1) * 48 + d; }
+        int FireAction(int d) { int j = PitchLevel; return j == 0 ? ActionFire + d : 50 + (j - 1) * 48 + d; }
+        bool StepPitch(float want)
+        {
+            float before = Pitch;
+            Pitch = Mathf.MoveTowards(Pitch, want, PitchSpeed * TimeInfo.elapsedTime);
+            if (before != Pitch) repaint();
+            return Mathf.Abs(Pitch - want) < 0.5f;
+        }
+
+        protected override bool caseAim()
+        {
+            bool turned = base.caseAim();
+            if (Spec?.Pitch == null) return turned;
+            var t = targetRole;
+            float want = t == null ? 0f : PitchFor(new Vector2(base.localPos.x, base.localPos.y), new Vector2(t.localPos.x, t.localPos.y));
+            return StepPitch(want) && turned;
+        }
+
+        public override void logic()
+        {
+            base.logic();
+            if (Spec?.Pitch != null && state == 1) StepPitch(0f);   // back to level when there is nothing to shoot
+        }
+
         public override void paint()
         {
             anim.setRotate(0f);
             buildPlayer.paintActionFrame(ActionBase, 0, 0f, 0f, 0f, centerRotate: false, 1f, 1f);
             if (state == 3) buildPlayer.paintAction(0f, 0f);
-            else buildPlayer.paintActionFrame(ActionIdle + Direction, 0, 0f, 0f, 0f, centerRotate: false, 1f, 1f);
+            else buildPlayer.paintActionFrame(IdleAction(Direction), 0, 0f, 0f, 0f, centerRotate: false, 1f, 1f);
             buildPlayer.updatePaint();
         }
 
         protected override void doShoot()
         {
             setState(3);
-            buildPlayer.setAction(ActionFire + Direction, -1);
+            buildPlayer.setAction(FireAction(Direction), -1);
         }
 
         protected override void shootBullets(CatCollisionArea area)

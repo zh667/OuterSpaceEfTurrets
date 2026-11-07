@@ -1,5 +1,5 @@
 {
- "comment": "First batch: towers that reuse the game's own turret logic. ids are the B_Defense ids the mod adds. head = parts that turn, base = parts that stay. upm = game units (32 per cell) per metre; size = footprint in cells. muzzles = barrels; muzzle_mode front|top|topfront picks the visible surface farthest forward / highest / both; static = the whole tower does not turn (one picture for every direction).",
+ "comment": "First batch: towers that reuse the game's own turret logic. ids are the B_Defense ids the mod adds. head = parts that turn, base = parts that stay. upm = game units (32 per cell) per metre; size = footprint in cells. muzzles = barrels; muzzle_mode front|top|topfront picks the visible surface farthest forward / highest / both; static = the whole tower does not turn (one picture for every direction). pitch = launcher parts that tilt up about their origin (trunnion), rendered at each angle in deg.",
  "elev": 50,
  "dirs": 24,
  "render_ppm": 256,
@@ -169,7 +169,21 @@
    ],
    "upm": 32,
    "size": 2,
-   "muzzles": 1
+   "muzzles": 1,
+   "pitch": {
+    "parts": [
+     "part_03_0"
+    ],
+    "deg": [
+     0,
+     10,
+     20,
+     30,
+     40,
+     50,
+     60
+    ]
+   }
   },
   {
    "id": "7203",
@@ -184,7 +198,21 @@
    "upm": 32,
    "size": 2,
    "muzzles": 1,
-   "muzzle_mode": "topfront"
+   "muzzle_mode": "topfront",
+   "pitch": {
+    "parts": [
+     "part_03_0"
+    ],
+    "deg": [
+     0,
+     10,
+     20,
+     30,
+     40,
+     50,
+     60
+    ]
+   }
   },
   {
    "id": "7204",
@@ -225,7 +253,21 @@
    "upm": 32,
    "size": 2,
    "muzzles": 1,
-   "muzzle_mode": "topfront"
+   "muzzle_mode": "topfront",
+   "pitch": {
+    "parts": [
+     "part_03_0"
+    ],
+    "deg": [
+     0,
+     10,
+     20,
+     30,
+     40,
+     50,
+     60
+    ]
+   }
   },
   {
    "id": "7306",
@@ -249,9 +291,8 @@
    "base": [],
    "upm": 32,
    "size": 2,
-   "muzzles": 1,
-   "muzzle_mode": "top",
-   "static": true
+   "muzzles": 2,
+   "muzzle_mode": "front"
   },
   {
    "id": "7404",

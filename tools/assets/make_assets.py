@@ -7,6 +7,8 @@
 #   action 0 = idle, facing up (the def's ModuleId is 0)      action 1 = base (fixed parts) + click rectangle
 #   action 2+d = firing towards direction d                    action 26+d = idle towards direction d
 #   d = 0..23, 15 degrees apart, clockwise from screen-up.
+#   towers with a pitched launcher (towers.json "pitch") add, for pitch level j = 1..n-1:
+#   action 50+(j-1)*48+d = firing, 74+(j-1)*48+d = idle
 import io, json, math, os, struct, sys
 import numpy as np
 from PIL import Image, ImageDraw
@@ -79,11 +81,12 @@ def pack(images, maxw=2048, pad=2):
 def find_muzzles(rd, d, expect, mode="front"):
     """Muzzles from the forward pass: the visible surface farthest along the firing direction, split across the barrel
     axis into the expected number of barrels. Returns render-pixel coordinates."""
-    rgb = np.asarray(Image.open(os.path.join(rd, "d%02d_rgb.png" % d["k"])).convert("RGBA"))
-    fw = np.asarray(Image.open(os.path.join(rd, "d%02d_fwd.png" % d["k"])).convert("L")).astype(np.float32) / 255
+    nm = d.get("name", "d%02d" % d["k"])
+    rgb = np.asarray(Image.open(os.path.join(rd, nm + "_rgb.png")).convert("RGBA"))
+    fw = np.asarray(Image.open(os.path.join(rd, nm + "_fwd.png")).convert("L")).astype(np.float32) / 255
     dec = lambda g: np.where(g > 0.04045, ((g + 0.055) / 1.055) ** 2.4, g / 12.92)
     fwd = dec(fw) * 8 - 4                     # metres along the firing direction
-    upi = np.asarray(Image.open(os.path.join(rd, "d%02d_up.png" % d["k"])).convert("L")).astype(np.float32) / 255
+    upi = np.asarray(Image.open(os.path.join(rd, nm + "_up.png")).convert("L")).astype(np.float32) / 255
     up = dec(upi) * 8                         # metres above the ground
     dot = {"front": fwd, "top": up, "topfront": fwd + up}[mode]
     vis = rgb[..., 3] > 128
@@ -110,20 +113,25 @@ def build(t):
     if t["base"]:
         im = pixelize(os.path.join(rd, "base_rgb.png"), os.path.join(rd, "base_nrm.png"), SPEC["render_ppm"], SPEC["render_ppm"] / k, crop=False, **P)
         base = crop_aligned(im, ax, ay, tu)
-    heads = []
-    dirs = info["dirs"]
-    if t.get("static"):
-        dirs = [dict(dirs[0], k=0) for _ in range(SPEC["dirs"])]
-    for d in dirs[:1] if t.get("static") else dirs:
-        im = pixelize(os.path.join(rd, "d%02d_rgb.png" % d["k"]), os.path.join(rd, "d%02d_nrm.png" % d["k"]), SPEC["render_ppm"], SPEC["render_ppm"] / k, crop=False, **P)
-        heads.append(crop_aligned(im, ax, ay, tu))
-    if t.get("static"): heads = heads * SPEC["dirs"]
+    # one row of 24 directions per pitch level (level 0 = level barrel; pitched launchers add rows, see the header)
+    levels = [info["dirs"]] + info.get("pdirs", [])
+    if t.get("static"): levels = [[dict(info["dirs"][0], k=0) for _ in range(SPEC["dirs"])]]
+    name_of = lambda d: d.get("name", "d%02d" % d["k"])
+    level_heads = []
+    for ldirs in levels:
+        hs = []
+        for d in ldirs[:1] if t.get("static") else ldirs:
+            im = pixelize(os.path.join(rd, name_of(d) + "_rgb.png"), os.path.join(rd, name_of(d) + "_nrm.png"), SPEC["render_ppm"], SPEC["render_ppm"] / k, crop=False, **P)
+            hs.append(crop_aligned(im, ax, ay, tu))
+        if t.get("static"): hs = hs * SPEC["dirs"]
+        level_heads.append(hs)
+    heads = level_heads[0]
     uniq = []                                   # one atlas entry per distinct picture (static towers repeat it)
-    for h in heads:
-        if not any(h is u for u in uniq): uniq.append(h)
+    for hs in level_heads:
+        for h in hs:
+            if not any(h is u for u in uniq): uniq.append(h)
     imgs = ([base[0]] if base else []) + [h[0] for h in uniq]
     atlas, pos = pack(imgs)
-    head_index = [next(i for i, u in enumerate(uniq) if u is h) for h in heads]
     b = Bin(PLACEHOLDER + "ef_" + tid)
     def place(i, entry):    # module + part placement for image i (left/top in units)
         im, lu, tu_ = entry; x, y = pos[i]; mid = b.module(x, y, im.width, im.height)
@@ -137,35 +145,42 @@ def build(t):
         mid, lx, ly = place(0, base); base_part = [(mid, lx, ly, 1.0 / tu)]
     f_base = b.frame(base_part, [click])
     off = 1 if base else 0
-    rest, fire_seq, muzzles_u = [], [], []
     mod_cache = {}
-    for i, (d, h) in enumerate(zip(dirs, heads)):
-        hi = head_index[i]
-        if hi not in mod_cache: mod_cache[hi] = place(off + hi, h)
-        mid, lx, ly = mod_cache[hi]
-        rx, ry = d["recoil_px_per_m"]; sx = rx * rec / k / tu; sy = ry * rec / k / tu
-        if t.get("static"): sx, sy = 0.0, -0.6      # whole tower stands still: just a small kick upwards
-        dx, dy = int(round(sx)), int(round(sy))
-        if dx == 0 and dy == 0: dx, dy = (int(math.copysign(1, sx)) if abs(sx) >= abs(sy) else 0), (int(math.copysign(1, sy)) if abs(sy) > abs(sx) else 0)
-        mpx = find_muzzles(rd, d, t.get("muzzles", 1), t.get("muzzle_mode", "front"))
-        mu = [((mx / k - ax) / tu, (my / k - ay) / tu) for mx, my in mpx]
-        muzzles_u.append(mu)
-        coll = [(0, int(round(x)) - 2, int(round(y)) - 2, 4, 4) for x, y in mu]
-        part = lambda ox=0, oy=0: [(mid, lx + ox, ly + oy, 1.0 / tu)]
-        R = b.frame(part()); K = b.frame(part(dx, dy)); M = b.frame(part(int(round(dx / 2)), int(round(dy / 2))))
-        rest.append(R)
-        if pattern == "alternate" and len(coll) >= 2:
-            F1 = b.frame(part(), [coll[0]]); F2 = b.frame(part(), [coll[1]])
-            seq = [(F1, 50), (K, 50), (F2, 50), (K, 50)]
-        elif pattern == "beam":
-            F = b.frame(part(), coll); seq = [(F, 60), (M, 120), (R, 200)]
-        else:
-            F = b.frame(part(), coll); seq = [(F, 60), (K, 120), (M, 120), (R, 160)]
-        fire_seq.append(seq)
+    level_rest, level_fire, level_muzzles = [], [], []
+    for ldirs, hs in zip(levels, level_heads):
+        rest, fire_seq, muzzles_u = [], [], []
+        for d, h in zip(ldirs, hs):
+            hi = next(i for i, u in enumerate(uniq) if u is h)
+            if hi not in mod_cache: mod_cache[hi] = place(off + hi, h)
+            mid, lx, ly = mod_cache[hi]
+            rx, ry = d["recoil_px_per_m"]; sx = rx * rec / k / tu; sy = ry * rec / k / tu
+            if t.get("static"): sx, sy = 0.0, -0.6      # whole tower stands still: just a small kick upwards
+            dx, dy = int(round(sx)), int(round(sy))
+            if dx == 0 and dy == 0: dx, dy = (int(math.copysign(1, sx)) if abs(sx) >= abs(sy) else 0), (int(math.copysign(1, sy)) if abs(sy) > abs(sx) else 0)
+            mpx = find_muzzles(rd, d, t.get("muzzles", 1), t.get("muzzle_mode", "front"))
+            mu = [((mx / k - ax) / tu, (my / k - ay) / tu) for mx, my in mpx]
+            muzzles_u.append(mu)
+            coll = [(0, int(round(x)) - 2, int(round(y)) - 2, 4, 4) for x, y in mu]
+            part = lambda ox=0, oy=0: [(mid, lx + ox, ly + oy, 1.0 / tu)]
+            R = b.frame(part()); K = b.frame(part(dx, dy)); M = b.frame(part(int(round(dx / 2)), int(round(dy / 2))))
+            rest.append(R)
+            if pattern == "alternate" and len(coll) >= 2:
+                F1 = b.frame(part(), [coll[0]]); F2 = b.frame(part(), [coll[1]])
+                seq = [(F1, 50), (K, 50), (F2, 50), (K, 50)]
+            elif pattern == "beam":
+                F = b.frame(part(), coll); seq = [(F, 60), (M, 120), (R, 200)]
+            else:
+                F = b.frame(part(), coll); seq = [(F, 60), (K, 120), (M, 120), (R, 160)]
+            fire_seq.append(seq)
+        level_rest.append(rest); level_fire.append(fire_seq); level_muzzles.append(muzzles_u)
+    rest, fire_seq, muzzles_u = level_rest[0], level_fire[0], level_muzzles[0]
     b.action([(rest[0], 100)])              # 0 idle up (ModuleId 0)
     b.action([(f_base, 100)])               # 1 base
     for s in fire_seq: b.action(s)          # 2..25
     for r in rest: b.action([(r, 100)])     # 26..49
+    for fs, rs in zip(level_fire[1:], level_rest[1:]):   # pitch level j >= 1: firing 50+(j-1)*48+d, idle 74+(j-1)*48+d
+        for s in fs: b.action(s)
+        for r in rs: b.action([(r, 100)])
     gen = os.path.join(ROOT, "local", "gen"); os.makedirs(os.path.join(gen, "Sprites"), exist_ok=True)
     os.makedirs(os.path.join(gen, "Textures"), exist_ok=True); os.makedirs(os.path.join(gen, "review"), exist_ok=True)
     atlas.save(os.path.join(gen, "Sprites", "ef_%s.png" % tid))
@@ -191,7 +206,7 @@ def build(t):
     for i, c in enumerate(cells): sheet.paste(c.convert("RGB"), ((i % 6) * cw, (i // 6) * ch))
     sheet.save(os.path.join(gen, "review", "%s.png" % tid))
     return {"id": tid, "atlas": atlas.size, "modules": len(b.modules), "frames": len(b.frames), "actions": len(b.actions),
-            "head_px": heads[0][0].size, "muzzles": len(muzzles_u[0]), "pattern": pattern}
+            "head_px": heads[0][0].size, "muzzles": len(muzzles_u[0]), "pattern": pattern, "pitch": info.get("pitch", [0])}
 
 
 if __name__ == "__main__":
