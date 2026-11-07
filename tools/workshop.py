@@ -5,7 +5,8 @@
 #       builds the mod (tools/build.py, without installing it), then uploads dist/<folder> with the title, description,
 #       tags and preview in tools/workshop/item.json. The first upload creates the item (private unless --visibility
 #       says otherwise) and writes its id to tools/workshop/published_id.txt; later uploads update that item and keep
-#       its visibility unless --visibility is given. The change note defaults to the mod version.
+#       its visibility unless --visibility is given. The change note defaults to the mod version. Title and description
+#       are written for every language in item.json "languages" (Steam keeps them per language).
 # Steam must be running and logged in. Steam shows you as playing the game while the uploader runs.
 import json, os, re, shutil, subprocess, sys
 
@@ -16,6 +17,7 @@ import build  # noqa: E402  (tools/build.py)
 WS = os.path.join(HERE, "workshop")
 ITEM = json.load(open(os.path.join(WS, "item.json"), encoding="utf-8"))
 ID_FILE = os.path.join(WS, "published_id.txt")
+LANGS = ITEM.get("languages") or ["schinese"]
 EXE_DIR = os.path.join(ROOT, "bin", "workshop")
 STEAM_API = os.path.join(build.GAME, "Outer Space_Data", "Plugins", "x86_64", "steam_api64.dll")
 NOWIN = 0x08000000
@@ -59,7 +61,7 @@ def main():
     app = str(ITEM["appId"]); pid = published_id()
     if cmd == "check":
         exe = build_uploader()
-        code, _ = run(exe, ["check", "--app", app] + (["--id", pid] if pid else []))
+        code, _ = run(exe, ["check", "--app", app] + (["--id", pid, "--langs", ",".join(LANGS)] if pid else []))
         sys.exit(code)
     if cmd != "upload": sys.exit("usage: workshop.py preview|check|upload [--visibility V] [--note TEXT]")
 
@@ -75,7 +77,7 @@ def main():
         sys.exit("item.json content is not the build output " + dist)
     exe = build_uploader()
     args = ["upload", "--app", app, "--content", content, "--preview", preview, "--title", ITEM["title"],
-            "--desc-file", os.path.join(ROOT, ITEM["descriptionFile"]), "--lang", ITEM.get("language", "schinese"),
+            "--desc-file", os.path.join(ROOT, ITEM["descriptionFile"]), "--lang", LANGS[0],
             "--tags", ",".join(ITEM.get("tags", [])), "--note", note or version()]
     if pid: args += ["--id", pid]
     else: args += ["--create"]; vis = vis or "private"
@@ -83,9 +85,16 @@ def main():
     code, out = run(exe, args)
     m = re.search(r"PUBLISHED_ID=(\d+)", out)
     if m and not pid:
-        open(ID_FILE, "w", encoding="utf-8", newline="\n").write(m.group(1) + "\n")
-        print("published id", m.group(1), "written to", ID_FILE, "(commit it)")
-    sys.exit(code)
+        pid = m.group(1)
+        open(ID_FILE, "w", encoding="utf-8", newline="\n").write(pid + "\n")
+        print("published id", pid, "written to", ID_FILE, "(commit it)")
+    if code != 0: sys.exit(code)
+    # the same title and description for the other languages (Steam keeps one per language)
+    for lang in LANGS[1:]:
+        code, _ = run(exe, ["upload", "--app", app, "--id", pid, "--meta-only", "--lang", lang, "--title", ITEM["title"],
+                            "--desc-file", os.path.join(ROOT, ITEM["descriptionFile"]), "--note", (note or version()) + "（" + lang + "）"])
+        if code != 0: sys.exit(code)
+    run(exe, ["check", "--app", app, "--id", pid, "--langs", ",".join(LANGS)])
 
 
 if __name__ == "__main__":

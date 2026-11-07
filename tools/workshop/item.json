@@ -1,8 +1,8 @@
 {
-  "comment": "Steam Workshop page of the mod (tools/workshop.py). The published id is kept in published_id.txt next to this file.",
+  "comment": "Steam Workshop page of the mod (tools/workshop.py). The published id is kept in published_id.txt next to this file. Steam keeps title and description per language: the same text is written for every language listed (english is what the web and clients in other languages show).",
   "appId": 3080070,
   "title": "工业防御塔",
-  "language": "schinese",
+  "languages": ["schinese", "english"],
   "tags": ["Mod"],
   "content": "dist/EfTurrets",
   "preview": "local/workshop/preview.png",

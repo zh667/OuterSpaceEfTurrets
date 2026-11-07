@@ -12,7 +12,9 @@ namespace WorkshopUpload
     //   WorkshopUpload check  --app <id> [--id <published id>]
     //   WorkshopUpload upload --app <id> (--id <published id> | --create) --content <dir> --preview <image>
     //                         --title <text> --desc-file <file> [--lang schinese] [--tags a,b]
-    //                         [--visibility private|friends|unlisted|public] [--note <text>]
+    //                         [--visibility private|friends|unlisted|public] [--note <text>] [--meta-only]
+    //   (--meta-only: only the title and description in --lang; Steam keeps them per language, so the uploader is run
+    //    once more for each further language)
     // Prints PUBLISHED_ID=<id> after creating an item and RESULT=OK <url> when the upload went through.
     static class Program
     {
@@ -66,18 +68,30 @@ namespace WorkshopUpload
 
             if (cmd == "check")
             {
-                if (o.TryGetValue("id", out var s) && s != "") Show(new PublishedFileId_t(ulong.Parse(s)));
+                if (o.TryGetValue("id", out var s) && s != "")
+                {
+                    var pid = new PublishedFileId_t(ulong.Parse(s));
+                    Show(pid);
+                    // the description as Steam serves it in each language (an update only changes its own language)
+                    foreach (var l in (o.TryGetValue("langs", out var ls) && ls != "" ? ls : "english,schinese").Split(','))
+                        ShowText(pid, l);
+                }
                 Console.WriteLine("RESULT=OK");
                 return 0;
             }
             if (cmd != "upload") throw new ArgumentException("unknown command " + cmd);
 
-            string content = Path.GetFullPath(Need(o, "content"));
-            if (!File.Exists(Path.Combine(content, "Manifest", "manifest.xml")))
-                throw new ArgumentException("no Manifest/manifest.xml in " + content + " (the game skips such items)");
-            string preview = Path.GetFullPath(Need(o, "preview"));
-            if (!File.Exists(preview)) throw new ArgumentException("no preview " + preview);
-            if (new FileInfo(preview).Length >= 1024 * 1024) throw new ArgumentException("preview must be under 1 MB");
+            bool metaOnly = o.ContainsKey("meta-only");
+            string content = null, preview = null;
+            if (!metaOnly)
+            {
+                content = Path.GetFullPath(Need(o, "content"));
+                if (!File.Exists(Path.Combine(content, "Manifest", "manifest.xml")))
+                    throw new ArgumentException("no Manifest/manifest.xml in " + content + " (the game skips such items)");
+                preview = Path.GetFullPath(Need(o, "preview"));
+                if (!File.Exists(preview)) throw new ArgumentException("no preview " + preview);
+                if (new FileInfo(preview).Length >= 1024 * 1024) throw new ArgumentException("preview must be under 1 MB");
+            }
             string title = Need(o, "title");
             string desc = File.ReadAllText(Need(o, "desc-file"));
             if (title.Length > 128) throw new ArgumentException("title over 128 characters");
@@ -86,6 +100,7 @@ namespace WorkshopUpload
             PublishedFileId_t id;
             if (o.ContainsKey("create"))
             {
+                if (metaOnly) throw new ArgumentException("--create needs the content");
                 if (o.ContainsKey("id")) throw new ArgumentException("--create and --id together");
                 var c = Wait<CreateItemResult_t>(SteamUGC.CreateItem(appId, EWorkshopFileType.k_EWorkshopFileTypeCommunity), 120, null);
                 if (c.m_eResult != EResult.k_EResultOK) throw new Exception("create failed: " + c.m_eResult);
@@ -100,10 +115,13 @@ namespace WorkshopUpload
             Check(SteamUGC.SetItemUpdateLanguage(h, o.TryGetValue("lang", out var lang) && lang != "" ? lang : "schinese"), "language");
             Check(SteamUGC.SetItemTitle(h, title), "title");
             Check(SteamUGC.SetItemDescription(h, desc), "description");
-            if (o.TryGetValue("tags", out var tags) && tags != "")
-                Check(SteamUGC.SetItemTags(h, new List<string>(tags.Split(','))), "tags");
-            Check(SteamUGC.SetItemContent(h, content), "content");
-            Check(SteamUGC.SetItemPreview(h, preview), "preview");
+            if (!metaOnly)
+            {
+                if (o.TryGetValue("tags", out var tags) && tags != "")
+                    Check(SteamUGC.SetItemTags(h, new List<string>(tags.Split(','))), "tags");
+                Check(SteamUGC.SetItemContent(h, content), "content");
+                Check(SteamUGC.SetItemPreview(h, preview), "preview");
+            }
             if (o.TryGetValue("visibility", out var vis) && vis != "") Check(SteamUGC.SetItemVisibility(h, Visibility(vis)), "visibility");
 
             o.TryGetValue("note", out var note);
@@ -157,6 +175,26 @@ namespace WorkshopUpload
                 var updated = DateTimeOffset.FromUnixTimeSeconds(d.m_rtimeUpdated).LocalDateTime;
                 Console.WriteLine("item " + id + ": " + d.m_eResult + ", title \"" + d.m_rgchTitle + "\", " + d.m_eVisibility
                                   + ", owner " + d.m_ulSteamIDOwner + ", size " + d.m_nFileSize + ", updated " + updated);
+            }
+            finally { SteamUGC.ReleaseQueryUGCRequest(q); }
+        }
+
+        static void ShowText(PublishedFileId_t id, string lang)
+        {
+            var q = SteamUGC.CreateQueryUGCDetailsRequest(new[] { id }, 1);
+            try
+            {
+                SteamUGC.SetLanguage(q, lang);
+                SteamUGC.SetReturnLongDescription(q, true);
+                var done = Wait<SteamUGCQueryCompleted_t>(SteamUGC.SendQueryUGCRequest(q), 60, null);
+                if (done.m_eResult != EResult.k_EResultOK || done.m_unNumResultsReturned == 0 || !SteamUGC.GetQueryUGCResult(q, 0, out var d))
+                {
+                    Console.WriteLine("[" + lang + "] no details (" + done.m_eResult + ")");
+                    return;
+                }
+                string text = d.m_rgchDescription ?? "";
+                Console.WriteLine("[" + lang + "] title \"" + d.m_rgchTitle + "\", description " + text.Length + " chars, ends: "
+                                  + text.Substring(Math.Max(0, text.Length - 160)).Replace("\n", " / "));
             }
             finally { SteamUGC.ReleaseQueryUGCRequest(q); }
         }
