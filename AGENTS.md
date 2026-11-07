@@ -123,3 +123,14 @@ Mod for *Outer Space / 秩序：新曙光* (Steam 3080070), started from `E:/pro
   2.4 cells wide.
 - Release note: the v0.4.1 tag holds only the version number and notes (the flame commit's push failed while the network
   was down); the flame code is released as 0.4.2. Check `git log origin/main` after every push before merging.
+
+## 0.4.3 (2026-11-07): no line-of-sight check
+- The game's `Defense_BaseTurret.canAim` / `checkTargetAvailable` skip a target when the line to it crosses a cell
+  that blocks bullets (`GridNode.canSight` = BulletPassable 1), and every turret has BulletPassable 0: in a row of
+  towers the ones behind ignored a monster beating on the end of the row (user report). `EfTurret` overrides both
+  with the same checks minus the sight test. Shots are unaffected: `BulletManager` only lets cover in the cells next to
+  the target take a bullet (`BaseBullet.getBulletPenetration`), and turrets have Penetration 0.
+- Test mode `blocked`: our tower, a game machine gun between, a monster behind it (no cover next to it). Ours must aim
+  at it and hurt it; the game's machine gun in the same layout must never aim at it (proves the line is blocked).
+  Compare targets by `monsterBean`, not by reference (the reference check counted 0 frames).
+- The mortar (7402) still has its 8-cell dead zone: a monster next to it is left to the other towers.

@@ -44,6 +44,7 @@ namespace EfTurrets
             if (req.tests == "plan") { yield return Guard(Plan(), "placement preview"); yield break; }
             if (req.tests == "power") { yield return Guard(Power(), "power"); yield break; }
             if (req.tests == "dps") { yield return Guard(Dps(), "damage per second"); yield break; }
+            if (req.tests == "blocked") { yield return Guard(Blocked(), "blocked line of sight"); yield break; }
             if (req.tests == "fxmats") { Run(FxMats); yield break; }
             if (req.tests == "fxpreview") { yield return Guard(FxPreview(), "fx preview"); yield break; }
             if (req.tests == "fxlab") { yield return Guard(FxLab(), "fx lab"); yield break; }
@@ -837,6 +838,103 @@ namespace EfTurrets
             c.details.Add(id + " " + def.Name + ": " + spawned.Count + " monsters, damage " + dmg.ToString("0") + " in " + secs.ToString("0.0") + " s = "
                 + (dmg / secs).ToString("0.0") + "/s, volleys " + shots + ", powered " + (frames > 0 ? 100 * powered / frames : 0) + "%");
         }
+
+        // A monster standing behind another turret (0.4.3). Every turret blocks the game's line of sight, so in a row of
+        // towers the ones behind used to ignore a monster beating on the end of the row. Ours must now shoot it; the
+        // game's machine gun in the same layout must not (that proves the line really is blocked).
+        IEnumerator Blocked()
+        {
+            var c = new Check { name = "shoots past a turret in the way" }; result.checks.Add(c);
+            EfTurret.TestPower = true; EfTurret.TestPowerId = "-";
+            CloseDialogs();
+            Locked(() => { var f = MapManager.getInstance().heroManager.getAllianceFaction(1); if (f != null) foreach (var h in f.getRoles()) if (h != null) people.Add(new Vector2(h.cellX, h.cellY)); });
+            Run(PickMonster);
+            // id -> frames aimed at the monster, damage, line blocked (1)
+            var got = new Dictionary<string, int[]>();
+            string[] ours = { "7101", "7404", "7402" };
+            foreach (var id in ours.Concat(new[] { "10" }))
+                yield return Guard(BlockedOne(id, c, got), "blocked " + id);
+            // ours: the line is blocked, they aim at the monster and hurt it; the game's gun: blocked, never aims at it
+            bool oursOk = ours.All(id => got.TryGetValue(id, out var a) && a[2] == 1 && a[0] > 0 && a[1] > 0);
+            bool control = got.TryGetValue("10", out var v) && v[2] == 1 && v[0] == 0 && v[1] == 0;
+            c.passed = oursOk && control;
+            c.summary = (oursOk ? "ours shoot through" : "ours DO NOT shoot") + "; game machine gun " + (control ? "holds fire (line blocked)" : "did not behave as a blocked control");
+        }
+        IEnumerator BlockedOne(string id, Check c, Dictionary<string, int[]> got)
+        {
+            var def = ImplDef<F_DefenseDef>.getDataID(id); var blk = ImplDef<F_DefenseDef>.getDataID("10");
+            if (def == null || blk == null) { c.details.Add(id + ": no row"); yield break; }
+            Defense_BaseTurret tower = null, wall = null; FWMonsterBean mon = null; BaseMonster monSprite = null;
+            int row = 0, mx = 0; string why0 = "";
+            Locked(() =>
+            {
+                var spread = UserBean.getInstance().curStarMap;
+                int w = def.Width + 1 + blk.Width + 14, h = Math.Max(def.Height, blk.Height) + 2;
+                var why = new Dictionary<string, int>();
+                for (int tries = 0; tries < 60 && tower == null; tries++)
+                {
+                    if (!FindFreeArea(w + 2, h + 2, used, def, why, out int x0, out int y0)) break;
+                    used.Add(new[] { x0, y0, w + 2, h + 2 });
+                    if (TurretNear(x0 + 1, y0 + 1, 40, 0)) continue;
+                    short tx = (short)(x0 + 1), ty = (short)(y0 + 1);
+                    row = ty + def.Height / 2;
+                    short bx = (short)(tx + def.Width + 1), by = (short)(row - blk.Height / 2);
+                    // the mortar's dead zone: the monster two cells beyond it
+                    int gap = Math.Max(3, s0MinRange(id) + 2 - (bx + blk.Width - (tx + def.Width / 2)));
+                    mx = bx + blk.Width + gap;
+                    if (mx + 2 > x0 + w + 2) { why["too long"] = 1; continue; }
+                    // no cover next to the monster: the game lets an obstacle there take the shot (a tree did once)
+                    var cover = new List<IHurter>();
+                    float pass = BaseBullet.getBulletPenetration(MapTools.cellX2PosCanter(tx), MapTools.cellY2PosCanter(row), MapTools.cellX2PosCanter(mx), MapTools.cellY2PosCanter(row), cover);
+                    if (cover.Count > 0 || pass < 1f) { why["cover"] = (why.TryGetValue("cover", out int k) ? k : 0) + 1; continue; }
+                    tower = spread.addBuild(BuildGenerator.createBean_Defend(def, 1, id, tx, ty, 0), tx, ty, 0) as Defense_BaseTurret;
+                    wall = spread.addBuild(BuildGenerator.createBean_Defend(blk, 1, "10", bx, by, 0), bx, by, 0) as Defense_BaseTurret;
+                    if (tower != null) dpsTowers.Add(tower);
+                    if (wall != null) dpsTowers.Add(wall);
+                }
+                why0 = string.Join(",", why.Select(kv => kv.Key + " " + kv.Value));
+                if (tower == null || wall == null) return;
+                mon = GMCommand.getInstance().Monster_AddMoster(monsterId, 2, (short)mx, (short)row);
+                if (mon != null) mon.setHp(20000);
+                CamearControl.getInstance().moveFollow((SpriteObject)tower);
+            });
+            if (tower == null || wall == null || mon == null) { c.details.Add(id + ": could not lay out (" + why0 + ")"); yield break; }
+            var mine = tower as EfTurret; var plain = tower as Defense_BaseInElectric;
+            EfTurret.TestPowerId = mine != null ? id : "-";
+            var targetField = typeof(Defense_BaseTurret).GetField("targetRole", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+            int aimed = 0, blocked = -1, shots0 = EfTurret.Shots(id); string seen = null;
+            yield return new WaitForSecondsRealtime(0.3f);
+            float hp0 = mon.getHp();
+            SetClock(1f);
+            float t0 = Time.realtimeSinceStartup; bool shot = false;
+            while (Time.realtimeSinceStartup - t0 < 12f)
+            {
+                yield return null;
+                if (mine == null) plain?.setSupportElectric(true);
+                Locked(() =>
+                {
+                    foreach (var r in MapManager.getInstance().monsterManager.getMonsters())
+                        if (r.monsterBean == mon) { r.mod_Move?.stopMove(); monSprite = r; }
+                    if (blocked < 0 && monSprite != null) blocked = SightTools.isInSight(tower, monSprite) ? 0 : 1;
+                });
+                var tr = targetField?.GetValue(tower) as SpriteObject;
+                if (tr != null && seen == null) seen = tr.GetType().Name + " at " + tr.cellX + "," + tr.cellY + (tr is BaseMonster bm ? " bean " + (bm.monsterBean == mon) : "");
+                if (monSprite != null && (ReferenceEquals(tr, monSprite) || (tr is BaseMonster tm && tm.monsterBean == mon))) aimed++;
+                if (!shot && (aimed > 20 || Time.realtimeSinceStartup - t0 > 6f)) { shot = true; CloseDialogs(); yield return Shot("blocked-" + id); }
+            }
+            SetClock(0f);
+            if (mine == null) plain?.setSupportElectric(false);
+            EfTurret.TestPowerId = "-";
+            float hp1 = mon.getHp();
+            Locked(() => { foreach (var r in MapManager.getInstance().monsterManager.getMonsters().ToList()) if (r.monsterBean == mon) GMCommand.getInstance().Monster_RemoveMoster(r); });
+            int dmg = (int)Math.Round(hp0 - hp1);
+            got[id] = new[] { aimed, dmg, blocked };
+            c.details.Add(id + " " + def.Name + ": monster " + (mx - tower.cellX) + " cells away behind a " + blk.Name + ", line of sight " + (blocked == 1 ? "blocked" : blocked == 0 ? "clear" : "unknown")
+                + "; frames aimed at it " + aimed + ", damage " + dmg + ", our shot count " + (EfTurret.Shots(id) - shots0)
+                + "; monster at " + mx + "," + row + ", first target " + (seen ?? "none") + (targetField == null ? " (no targetRole field)" : ""));
+        }
+
+        static int s0MinRange(string id) => EfData.Find(id)?.MinRangeCells ?? 0;
 
         // Opens the game's tech tree centred on each of the mod's nodes and takes a screenshot (cards and lines must
         // not overlap anything).
