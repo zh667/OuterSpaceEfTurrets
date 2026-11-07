@@ -108,12 +108,15 @@ namespace EfTurrets
                     // target, so the drawn nozzles point within 7.5 degrees of this line; following the drawn 15-degree
                     // step instead missed targets beside it at long range)
                     float len = s.Range * cell;
-                    for (int i = 0; i < 11; i++)   // overlapping sheets, growing with distance: one stream, not a row of blobs
+                    // a stream of the game's flamethrower bullets (Spue/Bullet, the flame the game's own flamethrowers fire)
+                    // flying from the nozzles to the end of the range, one every 0.035 s for 0.6 s; smoke rolling off it
+                    for (int i = 0; i < 17; i++)
                     {
-                        float f = (i + 1) / 11f; Vector2 at = muzzle + dir * (len * f); float when = 0.03f * i;
-                        After(when, () => EfFx.Particle(EfFx.FlameBlob, at, ang));
+                        float reach = len * EfFx.Rand(0.85f, 1f); Vector2 side = new Vector2(-dir.y, dir.x) * EfFx.Rand(-0.25f, 0.25f) * cell;
+                        After(0.035f * i, () => EfFx.Lob(EfFx.FlameBlob, muzzle, muzzle + dir * reach + side, 0f, reach / (len / 0.32f)));
                     }
-                    After(0.3f, () => EfLooks.FlameEnd(muzzle + dir * len, ang));
+                    EfLooks.Flame(muzzle, dir, len, 0.6f);
+                    After(0.45f, () => EfLooks.FlameEnd(muzzle + dir * len, ang));
                     // the ground it swept stays scorched for a while (the game's own burn mark)
                     for (int i = 1; i <= 3; i++) { Vector2 at = muzzle + dir * (len * (0.25f + 0.25f * i)); After(0.1f * i, () => EfGround.Add("burn", at, cell * 1.3f, 8f)); }
                     flameDir = dir;

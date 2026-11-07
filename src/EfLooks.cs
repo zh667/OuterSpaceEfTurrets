@@ -79,6 +79,14 @@ namespace EfTurrets
             EfPuffs.One(EfPuffs.Tex.Glow, Spark, at, Vector2.zero, 10f, 26f, 0.4f, 0.7f);
         }
 
+        // around the flamethrower's stream of flame bullets (EfSpecialTurret): a warm glow along it and light smoke
+        // rolling off the far half (EfPuffs.Spray: the puffs reach the end of the range against their drag)
+        public static void Flame(Vector2 from, Vector2 dir, float length, float seconds)
+        {
+            EfPuffs.Spray(EfPuffs.Tex.Glow, C(255, 170, 80), from, dir, length * 0.9f, 4f, 20f, seconds, 0.45f, 10f, length * 0.12f, 0.5f);
+            EfPuffs.Spray(EfPuffs.Tex.Smoke, Smoke, from + dir * (length * 0.4f), dir, length * 0.7f, 10f, 10f, seconds, 1.2f, 20f, 70f, 0.22f);
+        }
+
         // where the flame ends: the game's fire burst and light smoke rising over the burning ground
         public static void FlameEnd(Vector2 at, float angle)
         {

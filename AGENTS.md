@@ -121,3 +121,5 @@ Mod for *Outer Space / 秩序：新曙光* (Steam 3080070), started from `E:/pro
   by `EfFx.Lob` with no arc) from the nozzles to the end of the range, 17 of them over 0.6 s, plus a glow and smoke
   (`EfLooks.Flame`). The same picture copied as an 8-frame flipbook into EfPuffs came out faint. Range 15 cells, band
   2.4 cells wide.
+- Release note: the v0.4.1 tag holds only the version number and notes (the flame commit's push failed while the network
+  was down); the flame code is released as 0.4.2. Check `git log origin/main` after every push before merging.

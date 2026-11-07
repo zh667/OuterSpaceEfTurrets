@@ -112,7 +112,7 @@ namespace EfTurrets
                 Materials = "12_65_20|12_38_2|12_29_4" },
             new TowerSpec { Id = "7307", Template = "32", Tier = 3, Tech = "ef-def-3", Name = "AF1“熔甲者”", SortId = 66, Kind = "flame",
                 Desc = "近距离喷射火焰，持续灼烧前方的所有敌人。",
-                Hp = 6000, Atk = 45, Range = 12, Distance = 13, Reload = 3f, Radius = 1.6f, Consume = "150", Workload = 50,
+                Hp = 6000, Atk = 45, Range = 15, Distance = 16, Reload = 3f, Radius = 2.4f, Consume = "150", Workload = 50,
                 Materials = "12_65_25|12_20_20|12_18_30" },
             new TowerSpec { Id = "7404", Template = "53", Tier = 4, Tech = "ef-ray-4", Name = "甲二型“电荷”", SortId = 63, Kind = "charge",
                 Desc = "释放强电弧并在目标处留下电球。电弧最多弹射 4 次；电球持续 5 秒，灼伤周围的敌人。",
