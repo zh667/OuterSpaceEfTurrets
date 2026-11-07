@@ -31,6 +31,14 @@
 ## 构建与安装
 Windows：`python tools/build.py`（加 `install` 复制到 `<游戏>/mods/EfTurrets`，只替换 `Manifest` 和 `v_common`，旧安装先备份到 `dist/replaced-*`）。目标 net472，直接引用游戏 `Outer Space_Data/Managed` 的 DLL。装好后在游戏的模组菜单里启用一次。
 
+## 创意工坊
+Steam 创意工坊物品：https://steamcommunity.com/sharedfiles/filedetails/?id=3835337902 （编号记在 `tools/workshop/published_id.txt`）。游戏里没有上传按钮，用 `tools/workshop.py` 上传（Windows，Steam 要开着并已登录，不用输密码）：
+- `python tools/workshop.py preview`：用塔的精灵画封面 `local/workshop/preview.png`。
+- `python tools/workshop.py check`：编译上传工具、连上 Steam，显示工坊物品的现状。
+- `python tools/workshop.py upload [--visibility private|friends|unlisted|public] [--note 文字]`：重新编译模组并上传 `dist/EfTurrets`，标题、简介、标签、封面取自 `tools/workshop/item.json` 和 `description.txt`；更新说明默认是版本号；不加 `--visibility` 时不改可见性。
+
+上传工具（`tools/workshop/Program.cs`）用游戏自带的 Steamworks.NET 和 `steam_api64.dll`。工坊里的物品就是模组文件夹本身（根目录要有 `Manifest/manifest.xml`）；本地 `mods` 里有同一个模组时，游戏用工坊那份。
+
 ## 测试
 `python tools/run_isolated.py --save <星球上的存档> --exact-save`：在游戏的隔离副本里运行 `src/SelfTest.cs`，原版游戏和玩家存档只读。自测会检查表格行和科技、把 19 座塔放到地图上、每座塔各打一场（特殊塔按自己造成的命中、击退、减速、眩晕判定）、医疗塔回血和修理，并截图。`--tests techtree` 只打开科技树、对每个新节点截图；`ground` 铺出所有地面效果；`plan` 检查放置预览的方向；`power` 检查不通电的塔不开火；`dps` 实测每座塔和原版同类炮塔的每秒伤害；`fxpreview` 拍特殊塔的近景特效序列。`blocked` 检查塔能打被别的塔挡住视线的怪；`perf` 压测（38 座塔、76 只怪，四个阶段各出一行性能记录）。加 `--only-this-mod` 时隔离副本里只装本模组。
 
