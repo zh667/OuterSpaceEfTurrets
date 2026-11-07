@@ -23,7 +23,7 @@ namespace EfTurrets
         };
         static readonly HashSet<Tex> Additive = new HashSet<Tex> { Tex.Glow, Tex.Spark, Tex.Ring, Tex.Crackle };
 
-        class Puff { public string key; public Vector2 pos, vel; public float s0, s1, life, age, a, rot, spin, rise; }
+        class Puff { public string key; public Vector2 pos, vel; public float s0, s1, life, age, a, rise; }
         class Emitter { public Tex tex; public Color c; public Vector2 at; public float radius, rate, left, acc, life, s0, s1, rise, a; }
 
         static readonly List<Puff> puffs = new List<Puff>();
@@ -45,7 +45,7 @@ namespace EfTurrets
         {
             if (OffMain(() => One(t, c, at, vel, s0, s1, life, a, rise))) return;
             string key = Key(t, c); if (Drawer(key, t, c) == null) return;
-            puffs.Add(new Puff { key = key, pos = at, vel = vel, s0 = s0, s1 = s1, life = Mathf.Max(0.05f, life), a = a, rot = R(0, 360), spin = R(-40, 40), rise = rise });
+            puffs.Add(new Puff { key = key, pos = at, vel = vel, s0 = s0, s1 = s1, life = Mathf.Max(0.05f, life), a = a, rise = rise });   // no spin: the drawer turns a quad about its corner, not its centre
         }
 
         // n puffs bursting out of 'at' at up to 'speed'
@@ -147,7 +147,7 @@ namespace EfTurrets
                 var p = puffs[i]; p.age += dt;
                 if (p.age >= p.life) { puffs.RemoveAt(i); continue; }
                 p.vel.y += p.rise * dt; p.vel *= 1f - Mathf.Min(0.9f, 1.2f * dt);
-                p.pos += p.vel * dt; p.rot += p.spin * dt;
+                p.pos += p.vel * dt;
             }
             foreach (var kv in drawers)
             {
@@ -162,7 +162,7 @@ namespace EfTurrets
                     float u = p.age / p.life;
                     float a = p.a * Mathf.Clamp01(u / 0.12f) * Mathf.Clamp01((1f - u) / 0.5f);
                     float s = Mathf.Lerp(p.s0, p.s1, Mathf.Sqrt(u)) / w;
-                    d.drawImage(p.pos.x, p.pos.y, s, s, p.rot, a, 3);
+                    d.drawImage(p.pos.x, p.pos.y, s, s, 0f, a, 3);
                 }
                 d.updatePaint();
             }

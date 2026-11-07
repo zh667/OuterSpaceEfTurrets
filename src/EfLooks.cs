@@ -23,7 +23,7 @@ namespace EfTurrets
         {
             if (kind == "frost") EfFx.Particle(EfFx.EmpBurst, at, 0f, 1.5f);
             if (kind == "acid") EfFx.Particle(EfFx.AcidHit, at);
-            EfPuffs.Burst(EfPuffs.Tex.Smoke2, Of(kind), at, 10, radius * 1.6f, 24f, radius * 1.1f, 1.1f, 0.8f);
+            EfPuffs.Burst(EfPuffs.Tex.Smoke2, Of(kind), at, 10, radius * 0.7f, 24f, radius * 1.0f, 1.1f, 0.8f);
             EfPuffs.Ring(Of(kind), at, 8f, radius * 1.1f, 0.5f, 0.75f);
             EfPuffs.Burst(EfPuffs.Tex.Spark, White, at, 8, radius * 3f, 7f, 3f, 0.4f, 1f);
         }
@@ -68,10 +68,10 @@ namespace EfTurrets
         // the sound wave: rings spreading from the tower over the range, dust thrown up
         public static void Wave(Vector2 at, float range)
         {
-            EfPuffs.Ring(White, at, 16f, range, 0.45f, 0.85f);
-            EfPuffs.Ring(Spark, at, 12f, range * 0.8f, 0.6f, 0.7f);
-            EfPuffs.Ring(White, at, 8f, range * 0.6f, 0.75f, 0.55f);
-            EfPuffs.Burst(EfPuffs.Tex.Smoke, C(225, 222, 214), at, 12, range * 1.2f, 20f, 52f, 0.8f, 0.35f);
+            EfPuffs.Ring(White, at, 16f, range, 0.45f, 0.45f);
+            EfPuffs.Ring(Spark, at, 12f, range * 0.75f, 0.6f, 0.35f);
+            EfPuffs.Ring(White, at, 8f, range * 0.5f, 0.75f, 0.25f);
+            EfPuffs.Burst(EfPuffs.Tex.Smoke, C(225, 222, 214), at, 8, range * 0.5f, 24f, 60f, 0.8f, 0.18f);
         }
         public static void Stunned(Vector2 at)
         {
