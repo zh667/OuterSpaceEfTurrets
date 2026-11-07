@@ -1,0 +1,10 @@
+{
+  "comment": "Steam Workshop page of the mod (tools/workshop.py). The published id is kept in published_id.txt next to this file.",
+  "appId": 3080070,
+  "title": "工业防御塔",
+  "language": "schinese",
+  "tags": ["Mod"],
+  "content": "dist/EfTurrets",
+  "preview": "local/workshop/preview.png",
+  "descriptionFile": "tools/workshop/description.txt"
+}
