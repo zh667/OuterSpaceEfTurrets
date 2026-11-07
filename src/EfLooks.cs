@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace EfTurrets
@@ -71,7 +72,7 @@ namespace EfTurrets
             EfPuffs.Ring(White, at, 16f, range, 0.45f, 0.45f);
             EfPuffs.Ring(Spark, at, 12f, range * 0.75f, 0.6f, 0.35f);
             EfPuffs.Ring(White, at, 8f, range * 0.5f, 0.75f, 0.25f);
-            EfPuffs.Burst(EfPuffs.Tex.Smoke, C(225, 222, 214), at, 8, range * 0.5f, 24f, 60f, 0.8f, 0.18f);
+            EfPuffs.Burst(EfPuffs.Tex.Smoke, Dust, at, 8, range * 0.5f, 24f, 60f, 0.8f, 0.18f);
         }
         public static void Stunned(Vector2 at)
         {
@@ -83,7 +84,7 @@ namespace EfTurrets
         // rolling off the far half (EfPuffs.Spray: the puffs reach the end of the range against their drag)
         public static void Flame(Vector2 from, Vector2 dir, float length, float seconds)
         {
-            EfPuffs.Spray(EfPuffs.Tex.Glow, C(255, 170, 80), from, dir, length * 0.9f, 4f, 20f, seconds, 0.45f, 10f, length * 0.12f, 0.5f);
+            EfPuffs.Spray(EfPuffs.Tex.Glow, Fire, from, dir, length * 0.9f, 4f, 20f, seconds, 0.45f, 10f, length * 0.12f, 0.5f);
             EfPuffs.Spray(EfPuffs.Tex.Smoke, Smoke, from + dir * (length * 0.4f), dir, length * 0.7f, 10f, 10f, seconds, 1.2f, 20f, 70f, 0.22f);
         }
 
@@ -110,5 +111,23 @@ namespace EfTurrets
         }
 
         static float Random01() => EfFx.Rand(0f, 1f);
+
+        // every texture and colour the looks above use (EfWarm prepares them before the first fight; the perf test
+        // fails if a fight still has to make one, so a new colour must be added here)
+        static readonly Color Dust = C(225, 222, 214), Fire = C(255, 170, 80);
+        public static IEnumerable<KeyValuePair<EfPuffs.Tex, Color>> Palette()
+        {
+            foreach (var k in new[] { "poison", "acid", "frost" })
+            {
+                yield return P(EfPuffs.Tex.Smoke2, Of(k)); yield return P(EfPuffs.Tex.Ring, Of(k)); yield return P(EfPuffs.Tex.Smoke, GasOf(k));
+                if (k != "frost") yield return P(EfPuffs.Tex.Glow, Of(k));
+            }
+            yield return P(EfPuffs.Tex.Spark, White); yield return P(EfPuffs.Tex.Glow, Ice);
+            yield return P(EfPuffs.Tex.Glow, Spark); yield return P(EfPuffs.Tex.Crackle, Spark);
+            yield return P(EfPuffs.Tex.Ring, White); yield return P(EfPuffs.Tex.Ring, Spark); yield return P(EfPuffs.Tex.Smoke, Dust);
+            yield return P(EfPuffs.Tex.Glow, Fire); yield return P(EfPuffs.Tex.Smoke, Smoke);
+            yield return P(EfPuffs.Tex.Smoke, Water); yield return P(EfPuffs.Tex.Smoke2, Water); yield return P(EfPuffs.Tex.Ring, Water);
+        }
+        static KeyValuePair<EfPuffs.Tex, Color> P(EfPuffs.Tex t, Color c) => new KeyValuePair<EfPuffs.Tex, Color>(t, c);
     }
 }

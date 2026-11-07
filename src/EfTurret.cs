@@ -91,8 +91,17 @@ namespace EfTurrets
             return StepPitch(want) && turned;
         }
 
-        public override void logic()
+        // timed for the mod's performance log (EfPerf); the towers' work is in Logic()
+        public sealed override void logic()
         {
+            long t = EfPerf.Now, m = EfPerf.Alloc();
+            try { Logic(); }
+            finally { EfPerf.AddSim(EfPerf.Sim.Logic, t); EfPerf.AddSimAlloc(m); }
+        }
+
+        protected virtual void Logic()
+        {
+            EfWarm.Wanted = true;
             base.logic();
             if (Spec?.Pitch != null && state == 1) StepPitch(0f);   // back to level when there is nothing to shoot
         }

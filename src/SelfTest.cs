@@ -45,6 +45,7 @@ namespace EfTurrets
             if (req.tests == "power") { yield return Guard(Power(), "power"); yield break; }
             if (req.tests == "dps") { yield return Guard(Dps(), "damage per second"); yield break; }
             if (req.tests == "blocked") { yield return Guard(Blocked(), "blocked line of sight"); yield break; }
+            if (req.tests == "perf") { yield return Guard(PerfRun(), "performance"); yield break; }
             if (req.tests == "fxmats") { Run(FxMats); yield break; }
             if (req.tests == "fxpreview") { yield return Guard(FxPreview(), "fx preview"); yield break; }
             if (req.tests == "fxlab") { yield return Guard(FxLab(), "fx lab"); yield break; }
@@ -837,6 +838,97 @@ namespace EfTurrets
             int shots = mine != null ? EfTurret.Shots(id) - shots0 : fires;
             c.details.Add(id + " " + def.Name + ": " + spawned.Count + " monsters, damage " + dmg.ToString("0") + " in " + secs.ToString("0.0") + " s = "
                 + (dmg / secs).ToString("0.0") + "/s, volleys " + shots + ", powered " + (frames > 0 ? 100 * powered / frames : 0) + "%");
+        }
+
+        // Performance under load (EfPerf): four phases of the same length, each closed with its own log line:
+        // nothing placed (the game alone), 38 towers idle (two of each kind), 38 towers fighting two standing monsters
+        // each at normal speed, and the same at triple speed.
+        IEnumerator PerfRun()
+        {
+            var c = new Check { name = "performance" }; result.checks.Add(c);
+            EfPerf.Window = 100000f;   // the phases flush by hand
+            EfPerf.EchoToGameLog = true;
+            CloseDialogs();
+            Locked(() => { var f = MapManager.getInstance().heroManager.getAllianceFaction(1); if (f != null) foreach (var h in f.getRoles()) if (h != null) people.Add(new Vector2(h.cellX, h.cellY)); });
+            Run(PickMonster);
+            const float phase = 25f;
+            SetClock(1f);
+            yield return PerfPhase(c, "1 什么都没放", phase);
+
+            EfTurret.TestPower = true; EfTurret.TestPowerId = null;
+            var towers = new List<EfTurret>();
+            Locked(() =>
+            {
+                var spread = UserBean.getInstance().curStarMap; var why = new Dictionary<string, int>();
+                for (int copy = 0; copy < 2; copy++)
+                    foreach (var sp in EfData.Towers)
+                    {
+                        var def = ImplDef<F_DefenseDef>.getDataID(sp.Id); int w = sp.Size + 4;
+                        if (!FindFreeArea(w, w, used, def, why, out int x0, out int y0)) continue;
+                        used.Add(new[] { x0, y0, w, w });
+                        short cx = (short)(x0 + 2 + sp.Size / 2), cy = (short)(y0 + 2 + sp.Size / 2);
+                        if (spread.addBuild(BuildGenerator.createBean_Defend(def, 1, sp.Id, cx, cy, 0), cx, cy, 0) is EfTurret t) towers.Add(t);
+                    }
+                if (towers.Count > 0) CamearControl.getInstance().moveFollow((SpriteObject)towers[0]);
+            });
+            c.details.Add("towers placed: " + towers.Count);
+            yield return PerfPhase(c, "2 " + towers.Count + " 座塔 没有怪", phase);
+            // the warm-up ran while the towers stood idle; a fight must not have to prepare anything any more
+            int loads0 = EfFx.LoadLog.Count, tints0 = EfPuffs.TintLog.Count, ground0 = EfGround.LoadLog.Count;
+            c.details.Add("warm-up: " + EfWarm.Done + "/" + EfWarm.Total + " prepared, finished " + EfWarm.Finished + "; prefabs " + loads0 + ", tints " + tints0 + ", ground pictures " + ground0);
+
+            var spawned = new List<FWMonsterBean>();
+            Locked(() =>
+            {
+                foreach (var t in towers)
+                {
+                    int n = 0;
+                    for (int a = 0; a < 360 && n < 2; a += 20)
+                    {
+                        double ang = (a + t.cellX * 7) * Math.PI / 180;
+                        short mx = (short)(t.cellX + Math.Round(10 * Math.Cos(ang))), my = (short)(t.cellY + Math.Round(10 * Math.Sin(ang)));
+                        if (CellProblem(mx, my, null) != null) continue;
+                        var m = GMCommand.getInstance().Monster_AddMoster(monsterId, 2, mx, my);
+                        if (m != null) { m.setHp(1000000); spawned.Add(m); n++; a += 90; }
+                    }
+                }
+            });
+            c.details.Add("monsters: " + spawned.Count);
+            yield return PerfPhase(c, "3 交战 " + spawned.Count + " 只怪 1 倍速", phase, spawned);
+            SetClock(3f);
+            yield return PerfPhase(c, "4 交战 3 倍速", phase, spawned);
+            SetClock(0f);
+            var late = EfFx.LoadLog.Skip(loads0).Concat(EfPuffs.TintLog.Skip(tints0)).Concat(EfGround.LoadLog.Skip(ground0)).ToList();
+            c.details.Add("prepared during the fights (should be none): " + (late.Count == 0 ? "none" : string.Join(", ", late)));
+            yield return Shot("perf-end");
+            Locked(() => { foreach (var r in MapManager.getInstance().monsterManager.getMonsters().ToList()) if (spawned.Contains(r.monsterBean)) GMCommand.getInstance().Monster_RemoveMoster(r); });
+            EfTurret.TestPower = false;
+            c.passed = EfWarm.Finished && late.Count == 0;
+            c.summary = towers.Count + " towers, " + spawned.Count + " monsters; one EfPerf line per phase in details and Player.log; "
+                + (late.Count == 0 ? "nothing prepared during the fights" : late.Count + " things prepared during the fights");
+        }
+
+        IEnumerator PerfPhase(Check c, string label, float seconds, List<FWMonsterBean> hold = null)
+        {
+            EfPerf.Flush();   // closes whatever ran before; the phase starts clean
+            float t0 = Time.realtimeSinceStartup, nextHold = 0f; int gc = GC.CollectionCount(0);
+            var dts = new List<float>();
+            while (Time.realtimeSinceStartup - t0 < seconds)
+            {
+                yield return null;
+                dts.Add(Time.unscaledDeltaTime * 1000f);
+                if (hold != null && Time.realtimeSinceStartup > nextHold)
+                {
+                    nextHold = Time.realtimeSinceStartup + 0.5f;   // the monsters stand (steady load; walking up makes it swing)
+                    Locked(() => { foreach (var r in MapManager.getInstance().monsterManager.getMonsters()) if (hold.Contains(r.monsterBean)) r.mod_Move?.stopMove(); });
+                }
+            }
+            EfPerf.Write("---- 阶段 " + label + " ----");
+            EfPerf.Flush();
+            dts.Sort();
+            float p50 = dts.Count > 0 ? dts[dts.Count / 2] : 0, p99 = dts.Count > 0 ? dts[Math.Min(dts.Count - 1, dts.Count * 99 / 100)] : 0;
+            c.details.Add("阶段 " + label + ": 帧 " + dts.Count + "，中位 " + p50.ToString("0.0") + "ms，99% " + p99.ToString("0.0") + "ms，最慢 " + (dts.Count > 0 ? dts[dts.Count - 1] : 0).ToString("0")
+                + "ms，回收 " + (GC.CollectionCount(0) - gc) + " 次 || " + (EfPerf.LastLineFresh ? EfPerf.LastLine : "（模组没有活动）"));
         }
 
         // A monster standing behind another turret (0.4.3). Every turret blocks the game's line of sight, so in a row of

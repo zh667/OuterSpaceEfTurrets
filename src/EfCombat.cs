@@ -25,22 +25,31 @@ namespace EfTurrets
         // Hostile creatures of the tower: hostile heroes (raiders), prisoners on the player's side, animals, monsters.
         public static List<BaseRole> Enemies(Defense_BaseTurret t, List<BaseRole> into = null)
         {
+            long t0 = EfPerf.Now;
             var list = into ?? new List<BaseRole>(); list.Clear();
-            var mm = MapManager.getInstance(); if (mm == null) return list;
-            sbyte hostile = RoleAlliance.getHostileAlliance(t.getAlliance());
-            var hf = mm.heroManager?.getAllianceFaction(hostile);
-            if (hf != null) foreach (var r in hf.getRoles()) Add(t, r, list);
-            if (t.getAlliance() == 1 && mm.heroManager?.prisoners != null) foreach (var r in mm.heroManager.prisoners) Add(t, r, list);
-            var af = mm.animalManager?.getAllianceFaction(hostile);
-            if (af != null) foreach (var r in af.getRoles()) Add(t, r, list);
-            var mf = mm.monsterManager?.getAllianceFaction(hostile);
-            if (mf != null) foreach (var r in mf.getRoles()) Add(t, r, list);
+            try { Collect(t, list); } finally { EfPerf.AddSim(EfPerf.Sim.Enemies, t0); EfPerf.Scanned(list.Count); }
             return list;
         }
 
-        static void Add(Defense_BaseTurret t, BaseRole r, List<BaseRole> list)
+        static void Collect(Defense_BaseTurret t, List<BaseRole> list)
         {
-            if (Alive(r) && RoleAlliance.isHostileAlliance(t, r) && !list.Contains(r)) list.Add(r);
+            var mm = MapManager.getInstance(); if (mm == null) return;
+            sbyte hostile = RoleAlliance.getHostileAlliance(t.getAlliance());
+            var hf = mm.heroManager?.getAllianceFaction(hostile);
+            // each faction list holds a role once and the lists are of different kinds, so only the prisoners (heroes
+            // like the hostile faction's) are checked against what is already there; Contains on every role was
+            // quadratic in the number of enemies
+            if (hf != null) foreach (var r in hf.getRoles()) Add(t, r, list, false);
+            if (t.getAlliance() == 1 && mm.heroManager?.prisoners != null) foreach (var r in mm.heroManager.prisoners) Add(t, r, list, true);
+            var af = mm.animalManager?.getAllianceFaction(hostile);
+            if (af != null) foreach (var r in af.getRoles()) Add(t, r, list, false);
+            var mf = mm.monsterManager?.getAllianceFaction(hostile);
+            if (mf != null) foreach (var r in mf.getRoles()) Add(t, r, list, false);
+        }
+
+        static void Add(Defense_BaseTurret t, BaseRole r, List<BaseRole> list, bool check)
+        {
+            if (Alive(r) && RoleAlliance.isHostileAlliance(t, r) && (!check || !list.Contains(r))) list.Add(r);
         }
 
         public static List<BaseRole> InRadius(List<BaseRole> all, Vector2 c, float radius)

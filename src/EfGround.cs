@@ -26,7 +26,7 @@ namespace EfTurrets
         // kind: acid, poison, frost (pools) or burn (scorch). radius in map units; the pool fills ~75% of its picture.
         public static void Add(string kind, Vector2 at, float radius, float seconds)
         {
-            if (!MainThread.onMain) { MainThread.post(() => Add(kind, at, radius, seconds)); return; }   // see EfFx
+            if (!MainThread.onMain) { EfPerf.Post(() => Add(kind, at, radius, seconds)); return; }   // see EfFx
             try
             {
                 string key = kind == "burn" ? "burn" : kind + "_" + EfFx.Rand(Variants);
@@ -38,10 +38,19 @@ namespace EfTurrets
             catch (Exception e) { Debug.LogWarning("[EfTurrets] ground mark: " + e.Message); }
         }
 
+        // every mark picture (EfWarm loads them before the first fight: decoding one took ~10 ms)
+        public static IEnumerable<string> Keys()
+        {
+            foreach (var k in new[] { "acid", "poison", "frost" }) for (int v = 0; v < Variants; v++) yield return k + "_" + v;
+            yield return "burn";
+        }
+        public static void Prepare(string key) => Drawer(key);
+        public static readonly List<string> LoadLog = new List<string>();   // pictures in the order they were loaded (tests)
+
         static Texture2D Texture(string key)
         {
             if (textures.TryGetValue(key, out var t) && t != null) return t;
-            t = null;
+            t = null; long t0 = EfPerf.Now;
             if (key == "burn") t = TextureManager.loadImagePng(FairyStatic.imgRoot + "groundburn.png");
             else if (Dir != null)
             {
@@ -53,7 +62,7 @@ namespace EfTurrets
                 }
                 else Debug.LogWarning("[EfTurrets] missing " + path);
             }
-            textures[key] = t;
+            textures[key] = t; LoadLog.Add(key); EfPerf.Slow("地面贴图 " + key, t0);
             return t;
         }
 

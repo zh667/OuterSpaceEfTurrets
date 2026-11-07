@@ -1,6 +1,6 @@
 """Run the mod's self-test in an isolated copy of the game and wait for its result file.
 
-python tools/run_isolated.py [--tests all|smoke|freeze-demo|...] [--save zh6657] [--exact-save] [--limit 900] [--no-build]
+python tools/run_isolated.py [--tests all|smoke|freeze-demo|...] [--save zh6657] [--exact-save] [--limit 900] [--no-build] [--only-this-mod]
 
 The copy lives in the mod kit (E:/projects/outer-space-modkit/runtime) and is shared by all mods; one test at a time.
 It differs from the installed game in three places only:
@@ -9,7 +9,8 @@ It differs from the installed game in three places only:
     LocalLow/CatStudio/OS ModTests instead of the player's folder;
   - steam_appid.txt next to the exe, so Steam does not restart the original game.
 The player's folder is only read: the newest save starting with --save (written at least a minute ago) is copied.
-The test copy carries the player's other installed mods and enables the ones they enabled, plus this mod. The copy starts minimised, with UNITY_MIXED_CALLSTACK=1 so a
+The test copy carries the player's other installed mods and enables the ones they enabled, plus this mod
+(--only-this-mod: no other mod is copied or enabled, e.g. for clean performance numbers). The copy starts minimised, with UNITY_MIXED_CALLSTACK=1 so a
 freeze dump can name managed frames. A heartbeat that stops for a minute counts as a freeze: the game is dumped
 (tools/freeze_dump.py), its threads listed with names, and it is ended.
 """
@@ -95,7 +96,7 @@ def read_mod_dat(path):
     return ids
 
 
-def prepare_data(save):
+def prepare_data(save, only_this):
     assert TEST_DATA != PLAYER_DATA and TEST_DATA.name == TEST_NAME.decode()
     archives = TEST_DATA / "archives"
     if archives.exists():
@@ -114,7 +115,7 @@ def prepare_data(save):
         shutil.copytree(PLAYER_DATA / "Assets", TEST_DATA / "Assets")   # audio/asset caches: faster first start
     # The player's mod setup: their enabled mods stay enabled (their files are copied by install_mod), so a save that
     # used them loads without the game's "missing mod" question; this mod is added.
-    ids = read_mod_dat(PLAYER_DATA / "mod.dat")
+    ids = [] if only_this else read_mod_dat(PLAYER_DATA / "mod.dat")
     if MOD["packageId"] not in ids:
         ids.append(MOD["packageId"])
     # mod.dat (ModPluginManager.saveInfo): big-endian int count, then per mod a big-endian ushort length + UTF-8 id.
@@ -123,7 +124,7 @@ def prepare_data(save):
     print("test data:", TEST_DATA, "save:", save, "mods enabled:", ids)
 
 
-def install_mod(no_build):
+def install_mod(no_build, only_this):
     if not no_build:
         r = subprocess.run([sys.executable, str(ROOT / "tools" / "build.py")], capture_output=True, text=True, encoding="utf-8", errors="replace")
         print(r.stdout[-1500:])
@@ -134,7 +135,7 @@ def install_mod(no_build):
         shutil.rmtree(mods)
     mods.mkdir()
     # The player's other installed mods (code and manifest only; their data folders stay with the player).
-    for other in (GAME / "mods").iterdir() if (GAME / "mods").exists() else []:
+    for other in (GAME / "mods").iterdir() if (GAME / "mods").exists() and not only_this else []:
         if other.is_dir() and other.name != MOD["folder"]:
             for part in ("Manifest", "v_common"):
                 if (other / part).exists():
@@ -150,6 +151,7 @@ def main():
     ap.add_argument("--tests", default="all")
     ap.add_argument("--limit", type=int, default=900, help="seconds before the run is abandoned")
     ap.add_argument("--no-build", action="store_true")
+    ap.add_argument("--only-this-mod", action="store_true", help="no other installed mod in the test copy")
     ap.add_argument("--refresh-runtime", action="store_true", help="copy every game file again (after a game update)")
     a = ap.parse_args()
 
@@ -161,8 +163,8 @@ def main():
     copy_game(a.refresh_runtime)
     patch_names()
     save = a.save if a.exact_save else newest_save(a.save)
-    prepare_data(save)
-    install_mod(a.no_build)
+    prepare_data(save, a.only_this_mod)
+    install_mod(a.no_build, a.only_this_mod)
 
     res, beat, log = RUNTIME / "selftest-result.json", RUNTIME / "selftest-heartbeat.txt", RUNTIME / "selftest-player.log"
     for p in (res, beat, log):

@@ -35,8 +35,10 @@ namespace EfTurrets
                 {
                     attacked = true;
                     Vector3 pos = base.localPos;
+                    long t = EfPerf.Now;
                     try { Attack(new Vector2(pos.x + areas[0].centerX(), pos.y + areas[0].centerY())); }
                     catch (Exception e) { Debug.LogWarning("[EfTurrets] attack " + buildDef?.ID + ": " + e.Message); }
+                    EfPerf.AddSim(EfPerf.Sim.Attack, t); EfPerf.Attacked();
                 }
             }
             if (p.isLastFramed() && attacked) { attacked = false; doFireFinish(); return; }
@@ -47,20 +49,25 @@ namespace EfTurrets
 
         protected override void checkStand() { if (S?.Kind == "medic") return; base.checkStand(); }
 
-        public override void logic()
+        protected override void Logic()
         {
-            base.logic();
+            base.Logic();
             float dt = TimeInfo.elapsedTime;
             if (S == null || dt <= 0) return;
             try
             {
-                for (int i = later.Count - 1; i >= 0; i--)
+                if (later.Count > 0)
                 {
-                    var e = later[i]; float left = e.Key - dt;
-                    if (left > 0) { later[i] = new KeyValuePair<float, Action>(left, e.Value); continue; }
-                    later.RemoveAt(i); e.Value();
+                    long t = EfPerf.Now;
+                    for (int i = later.Count - 1; i >= 0; i--)
+                    {
+                        var e = later[i]; float left = e.Key - dt;
+                        if (left > 0) { later[i] = new KeyValuePair<float, Action>(left, e.Value); continue; }
+                        later.RemoveAt(i); e.Value();
+                    }
+                    EfPerf.AddSim(EfPerf.Sim.Attack, t);
                 }
-                TickLasting(dt);
+                if (lasting.zones.Count > 0 || lasting.states.Count > 0) { long t = EfPerf.Now; TickLasting(dt); EfPerf.AddSim(EfPerf.Sim.Lasting, t); }
                 if (S.Kind == "medic" && isSupportElectriced()) { medicTimer += dt; if (medicTimer >= S.Reload) { medicTimer = 0; Medic(); } }
             }
             catch (Exception e) { Debug.LogWarning("[EfTurrets] tick " + buildDef?.ID + ": " + e.Message); }
@@ -174,7 +181,7 @@ namespace EfTurrets
             }
         }
 
-        static string BulletPath(string id) => "Eff_Defense/effects/" + (id ?? "bullets\\Plasma_Big").Replace('\\', '/');
+        internal static string BulletPath(string id) => "Eff_Defense/effects/" + (id ?? "bullets\\Plasma_Big").Replace('\\', '/');
 
         // where a lobbed shell came down: its splash damage (the row's ATK within DamageRange), then the lasting part
         void Land(Vector2 at)
@@ -190,11 +197,9 @@ namespace EfTurrets
                 case "frost":
                     lasting.zones.Add(new EfLasting.Zone { kind = "ice", at = at, radius = radius, left = s.Duration, tick = 0f });
                     EfGround.Add("frost", at, radius, s.Duration + 1.5f);
-                    EfCombat.Enemies(this, enemies);
                     foreach (var r in EfCombat.InRadius(enemies, at, radius)) CountEffect(buildDef.ID);   // slowed by the shell itself (Drag)
                     break;
                 case "acid":
-                    EfCombat.Enemies(this, enemies);
                     foreach (var r in EfCombat.InRadius(enemies, at, radius)) { lasting.Mark(r, "corrode", s.Duration); CountEffect(buildDef.ID); }
                     // the acid stays on the ground as a pool; whatever walks through it is corroded too
                     lasting.zones.Add(new EfLasting.Zone { kind = "acid", at = at, radius = radius, left = s.PoolSeconds, tick = EfLasting.Tick });
@@ -210,7 +215,11 @@ namespace EfTurrets
         void TickLasting(float dt)
         {
             var s = S; if (lasting.zones.Count == 0 && lasting.states.Count == 0) return;
-            if (lasting.zones.Count > 0) EfCombat.Enemies(this, enemies);
+            // zones act every EfLasting.Tick (0.5 s): look for enemies only when one of them is about to (it used to
+            // be every simulation step while any zone was down, the biggest cost of the mod under load)
+            bool due = false;
+            foreach (var z in lasting.zones) if (z.tick - dt <= 0) { due = true; break; }
+            if (due) EfCombat.Enemies(this, enemies);
             for (int i = lasting.zones.Count - 1; i >= 0; i--)
             {
                 var z = lasting.zones[i]; z.left -= dt; z.tick -= dt; z.fxTick -= dt;

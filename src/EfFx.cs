@@ -18,6 +18,13 @@ namespace EfTurrets
         public const string FlameBlob = "Eff_Bullets/effects/Spue/Bullet";            // spray of fire (flamethrower shot)
         public const string FlameHit = "Eff_Bullets/effects/Spue/Hit";
         public const string AcidHit = "Eff_Bullets/effects/plasma/Plasma Hit";        // yellow-green crackle
+        // the prefabs the towers' attacks load (EfWarm loads them before the first fight)
+        public static IEnumerable<string> WarmPaths()
+        {
+            yield return EmpBurst; yield return AcidHit; yield return FlameHit; yield return FlameBlob; yield return GroundFire;
+            foreach (var s in EfData.Towers) if (s.Kind == "frost" || s.Kind == "acid" || s.Kind == "poison") yield return EfSpecialTurret.BulletPath(s.Bullet);
+        }
+        public static readonly List<string> LoadLog = new List<string>();   // prefabs in the order they were loaded (tests)
         public const string EmpBurst = "Eff_Groung/Bomb/Bomb_Emp";                    // white-blue shock burst
         public const string GroundFire = "Eff_Groung/Fire/Fire";                      // small burning flames (loops)
         public static int Spawned;   // test counter
@@ -28,7 +35,7 @@ namespace EfTurrets
         static bool OffMain(Action a)
         {
             if (MainThread.onMain) return false;
-            MainThread.post(a);
+            EfPerf.Post(a);
             return true;
         }
 
@@ -105,7 +112,12 @@ namespace EfTurrets
 
         public static GameObject Prefab(string path)
         {
-            if (!prefabs.TryGetValue(path, out var p)) { try { p = PrefabLoader.getPrefab(FairyStatic.prefabRoot + path); } catch { p = null; } prefabs[path] = p; }
+            if (!prefabs.TryGetValue(path, out var p))
+            {
+                long t0 = EfPerf.Now;
+                try { p = PrefabLoader.getPrefab(FairyStatic.prefabRoot + path); } catch { p = null; }
+                prefabs[path] = p; EfPerf.Slow("特效预制体 " + path, t0); LoadLog.Add(path);
+            }
             return p;
         }
 

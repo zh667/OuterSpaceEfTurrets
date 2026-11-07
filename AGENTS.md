@@ -134,3 +134,21 @@ Mod for *Outer Space / 秩序：新曙光* (Steam 3080070), started from `E:/pro
   at it and hurt it; the game's machine gun in the same layout must never aim at it (proves the line is blocked).
   Compare targets by `monsterBean`, not by reference (the reference check counted 0 frames).
 - The mortar (7402) still has its 8-cell dead zone: a monster next to it is left to the other towers.
+
+## 0.4.4 (2026-11-07): performance log and fixes from it
+- `EfPerf`: the mod's own log, one line per 30 s to <persistentDataPath>/EfTurrets/EfTurrets-perf.log (the trade helper
+  keeps its own perf.log; ours does not go to Player.log except in the self-test, `EchoToGameLog`). Main-thread parts
+  are timed in ModBehaviour.Update; work posted from the simulation thread goes through `EfPerf.Post` (timed, slowest
+  one named by its lambda's method); `EfTurret.logic` is sealed and times `Logic()` (the towers override `Logic`).
+  `GC.GetAllocatedBytesForCurrentThread` exists in the game's Mono but always answers 0, so allocations are not counted.
+- Test `perf` (use `--only-this-mod`): 25 s each of nothing placed / 38 towers idle / 38 towers and 76 standing
+  monsters at 1x / the same at 3x. It fails if anything is still prepared during the fights.
+- Found and fixed (1x fight, before -> after): simulation thread 12.2 -> ~4 ms per second. Lasting zones scanned all
+  enemies every simulation step while any zone was down, and the scan deduplicated with List.Contains (quadratic);
+  now only when a zone is about to tick, and only prisoners are checked for duplicates. Puffs: no string per puff per
+  frame, one pass instead of drawers x puffs (0.29 -> 0.18 ms per frame). First fight: about 40 first uses (prefab load,
+  texture copy, recolour, ground picture decode; 6-30 ms each) landed in the same frames (worst 76 ms); `EfWarm`
+  prepares them one per frame once the map has one of our towers. The grey pixels of a puff texture are read once.
+- Remaining spikes in the log are garbage collections of the game's heap (~100 ms, about one per 25 s with or without
+  the mod) that land in whatever is being timed.
+- One perf run (of eight) ended with the game gone after phase 2 and no crash report or dump; not reproduced since.

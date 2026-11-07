@@ -32,6 +32,9 @@
 Windows：`python tools/build.py`（加 `install` 复制到 `<游戏>/mods/EfTurrets`，只替换 `Manifest` 和 `v_common`，旧安装先备份到 `dist/replaced-*`）。目标 net472，直接引用游戏 `Outer Space_Data/Managed` 的 DLL。装好后在游戏的模组菜单里启用一次。
 
 ## 测试
-`python tools/run_isolated.py --save <星球上的存档> --exact-save`：在游戏的隔离副本里运行 `src/SelfTest.cs`，原版游戏和玩家存档只读。自测会检查表格行和科技、把 19 座塔放到地图上、每座塔各打一场（特殊塔按自己造成的命中、击退、减速、眩晕判定）、医疗塔回血和修理，并截图。`--tests techtree` 只打开科技树、对每个新节点截图；`ground` 铺出所有地面效果；`plan` 检查放置预览的方向；`power` 检查不通电的塔不开火；`dps` 实测每座塔和原版同类炮塔的每秒伤害；`fxpreview` 拍特殊塔的近景特效序列。
+`python tools/run_isolated.py --save <星球上的存档> --exact-save`：在游戏的隔离副本里运行 `src/SelfTest.cs`，原版游戏和玩家存档只读。自测会检查表格行和科技、把 19 座塔放到地图上、每座塔各打一场（特殊塔按自己造成的命中、击退、减速、眩晕判定）、医疗塔回血和修理，并截图。`--tests techtree` 只打开科技树、对每个新节点截图；`ground` 铺出所有地面效果；`plan` 检查放置预览的方向；`power` 检查不通电的塔不开火；`dps` 实测每座塔和原版同类炮塔的每秒伤害；`fxpreview` 拍特殊塔的近景特效序列。`blocked` 检查塔能打被别的塔挡住视线的怪；`perf` 压测（38 座塔、76 只怪，四个阶段各出一行性能记录）。加 `--only-this-mod` 时隔离副本里只装本模组。
+
+## 性能日志
+模组运行时每 30 秒在 `C:/Users/<用户>/AppData/LocalLow/CatStudio/Outer Space/EfTurrets/EfTurrets-perf.log` 写一行（地图上没有本模组的塔时不写），超过 2MB 换到 `EfTurrets-perf.old.log`。和其他模组的性能日志是分开的文件，也不写进游戏的 Player.log。一行里有：游戏的平均帧和最慢帧；本模组在主线程每帧花的时间（特效、地面、粒子、放置预览、预热、从后台转来的绘制）；后台模拟线程每秒花在塔逻辑、特殊攻击、持续区域、找敌人上的时间；当时存活的粒子、特效和地面痕迹数量；垃圾回收次数。第一次准备某个特效超过 5ms 时也会记一行“一次性准备”。
 
 需要游戏 0.9.0020 或更新（模组逻辑跑在游戏的模拟线程上，特效转回主线程绘制）。

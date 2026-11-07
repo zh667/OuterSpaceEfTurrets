@@ -26,20 +26,23 @@ namespace EfTurrets
         // flipbooks: a row of square frames played over the puff's life; white = keep the picture's own colours
         static readonly HashSet<Tex> Flipbook = new HashSet<Tex> { Tex.Fire };
 
-        class Puff { public string key, draw; public int frames; public Vector2 pos, vel; public float s0, s1, life, age, a, rise; }
+        class Puff { public string key; public int frames, frame; public TextureDrawer d; public float w; public Vector2 pos, vel; public float s0, s1, life, age, a, rise; }
         class Emitter { public Tex tex; public Color c; public Vector2 at, dir; public float radius, rate, left, acc, life, s0, s1, rise, a, speed, spread; }
 
         static readonly List<Puff> puffs = new List<Puff>();
         static readonly List<Emitter> emitters = new List<Emitter>();
         static readonly Dictionary<Tex, Texture2D> gray = new Dictionary<Tex, Texture2D>();
+        static readonly Dictionary<Tex, Color32[]> grayPx = new Dictionary<Tex, Color32[]>();
         static readonly Dictionary<string, Texture2D[]> tinted = new Dictionary<string, Texture2D[]>();
         static readonly Dictionary<string, TextureDrawer> drawers = new Dictionary<string, TextureDrawer>();
         static GameObject root; static MapManager owner;
         static readonly System.Random rng = new System.Random();
         static float R(float a, float b) => a + (float)rng.NextDouble() * (b - a);
         public static int Live => puffs.Count;
+        public static int Emitters => emitters.Count;
+        public static int Drawers => drawers.Count;
 
-        static bool OffMain(Action a) { if (MainThread.onMain) return false; MainThread.post(a); return true; }
+        static bool OffMain(Action a) { if (MainThread.onMain) return false; EfPerf.Post(a); return true; }
 
         // ---------------------------------------------------------------- what the towers call
         // one puff: from 'at' moving with 'vel' (map units/s), growing s0 -> s1 (map units), 'life' seconds, peak alpha a,
@@ -47,8 +50,8 @@ namespace EfTurrets
         public static void One(Tex t, Color c, Vector2 at, Vector2 vel, float s0, float s1, float life, float a, float rise = 0f)
         {
             if (OffMain(() => One(t, c, at, vel, s0, s1, life, a, rise))) return;
-            string key = Key(t, c); var frames = Tinted(t, c, key); if (frames == null || Drawer(key, 0, frames) == null) return;
-            puffs.Add(new Puff { key = key, draw = key + "#0", frames = frames.Length, pos = at, vel = vel, s0 = s0, s1 = s1, life = Mathf.Max(0.05f, life), a = a, rise = rise });   // no spin: the drawer turns a quad about its corner, not its centre
+            string key = Key(t, c); var frames = Tinted(t, c, key); var d = frames == null ? null : Drawer(key, 0, frames); if (d == null) return;
+            puffs.Add(new Puff { key = key, d = d, w = frames[0].width, frames = frames.Length, pos = at, vel = vel, s0 = s0, s1 = s1, life = Mathf.Max(0.05f, life), a = a, rise = rise });   // no spin: the drawer turns a quad about its corner, not its centre
         }
 
         // n puffs bursting out of 'at' at up to 'speed'
@@ -88,7 +91,7 @@ namespace EfTurrets
         static Texture2D Gray(Tex t)
         {
             if (gray.TryGetValue(t, out var g)) return g;
-            g = null;
+            g = null; long t0 = EfPerf.Now;
             try
             {
                 var src = Source[t]; var prefab = EfFx.Prefab(src.Key);
@@ -106,6 +109,7 @@ namespace EfTurrets
                 else Debug.LogWarning("[EfTurrets] puff texture missing: " + src.Key + " / " + src.Value);
             }
             catch (Exception e) { Debug.LogWarning("[EfTurrets] puff texture " + t + ": " + e.Message); }
+            EfPerf.Slow("粒子贴图 " + t, t0);
             gray[t] = g; return g;
         }
 
@@ -114,31 +118,49 @@ namespace EfTurrets
         {
             if (tinted.TryGetValue(key, out var x)) return x;
             var g = Gray(t); if (g == null) { tinted[key] = null; return null; }
-            var px = g.GetPixels32(); bool add = Additive.Contains(t), raw = c.r >= 0.99f && c.g >= 0.99f && c.b >= 0.99f && Flipbook.Contains(t);
-            for (int i = 0; i < px.Length; i++)
-            {
-                var p = px[i]; float lum = Mathf.Max(p.r, Mathf.Max(p.g, p.b)) / 255f;
-                float a = add ? lum * (p.a / 255f) : p.a / 255f;
-                if (raw)   // keep the picture's colours, at full brightness (the alpha carries the brightness)
-                {
-                    float k = lum > 0.004f ? 1f / lum : 0f;
-                    px[i] = new Color32((byte)Mathf.Min(255, p.r * k), (byte)Mathf.Min(255, p.g * k), (byte)Mathf.Min(255, p.b * k), (byte)(Mathf.Clamp01(a) * 255));
-                    continue;
-                }
-                float shade = add ? 1f : 0.55f + 0.45f * lum;   // smoke keeps its light and shadow, glows are flat colour
-                px[i] = new Color32((byte)(c.r * shade * 255), (byte)(c.g * shade * 255), (byte)(c.b * shade * 255), (byte)(Mathf.Clamp01(a) * 255));
-            }
+            long t0 = EfPerf.Now;
+            // the grey pixels are read once per texture; each colour writes straight into its frames (reading them again
+            // for every colour allocated the whole picture each time and now and then set off a 100 ms collection)
+            if (!grayPx.TryGetValue(t, out var px)) grayPx[t] = px = g.GetPixels32();
+            bool add = Additive.Contains(t), raw = c.r >= 0.99f && c.g >= 0.99f && c.b >= 0.99f && Flipbook.Contains(t);
             int n = Flipbook.Contains(t) && g.width >= g.height * 2 ? g.width / g.height : 1, fw = g.width / n;
             x = new Texture2D[n];
             for (int f = 0; f < n; f++)
             {
                 var part = new Color32[fw * g.height];
-                for (int yy = 0; yy < g.height; yy++) Array.Copy(px, yy * g.width + f * fw, part, yy * fw, fw);
+                for (int yy = 0; yy < g.height; yy++)
+                    for (int xx = 0; xx < fw; xx++)
+                    {
+                        var p = px[yy * g.width + f * fw + xx]; float lum = Mathf.Max(p.r, Mathf.Max(p.g, p.b)) / 255f;
+                        float a = add ? lum * (p.a / 255f) : p.a / 255f;
+                        Color32 o;
+                        if (raw)   // keep the picture's colours, at full brightness (the alpha carries the brightness)
+                        {
+                            float k = lum > 0.004f ? 1f / lum : 0f;
+                            o = new Color32((byte)Mathf.Min(255, p.r * k), (byte)Mathf.Min(255, p.g * k), (byte)Mathf.Min(255, p.b * k), (byte)(Mathf.Clamp01(a) * 255));
+                        }
+                        else
+                        {
+                            float shade = add ? 1f : 0.55f + 0.45f * lum;   // smoke keeps its light and shadow, glows are flat colour
+                            o = new Color32((byte)(c.r * shade * 255), (byte)(c.g * shade * 255), (byte)(c.b * shade * 255), (byte)(Mathf.Clamp01(a) * 255));
+                        }
+                        part[yy * fw + xx] = o;
+                    }
                 x[f] = new Texture2D(fw, g.height, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
                 x[f].SetPixels32(part); x[f].Apply(false, true);
             }
+            EfPerf.Slow("粒子上色 " + key, t0); TintLog.Add(key);
             tinted[key] = x; return x;
         }
+
+        // main thread: makes the texture(s) and the drawer for this look now, so the first fight does not have to
+        public static void Prepare(Tex t, Color c)
+        {
+            string key = Key(t, c); var frames = Tinted(t, c, key);
+            if (frames != null) for (int f = 0; f < frames.Length; f++) Drawer(key, f, frames);
+        }
+        public static int TintsMade => tinted.Count;
+        public static readonly List<string> TintLog = new List<string>();   // keys in the order they were made (tests)
 
         static TextureDrawer Drawer(string key, int frame, Texture2D[] frames)
         {
@@ -184,27 +206,31 @@ namespace EfTurrets
                 if (p.age >= p.life) { puffs.RemoveAt(i); continue; }
                 p.vel.y += p.rise * dt; p.vel *= 1f - Mathf.Min(0.9f, Drag * dt);
                 p.pos += p.vel * dt;
-                int f = p.frames > 1 ? Mathf.Min(p.frames - 1, (int)(p.age / p.life * p.frames)) : 0;
-                p.draw = p.key + "#" + f;
-                if (f > 0 && !drawers.ContainsKey(p.draw)) Drawer(p.key, f, tinted[p.key]);
+                if (p.frames > 1)
+                {
+                    int f = Mathf.Min(p.frames - 1, (int)(p.age / p.life * p.frames));
+                    if (f != p.frame) { p.frame = f; p.d = Drawer(p.key, f, tinted[p.key]); }
+                }
+                if (p.d != null) used.Add(p.d);
             }
+            // a drawer with nothing to draw keeps its last mesh, so it is hidden instead
             foreach (var kv in drawers)
             {
                 var d = kv.Value; if (d == null) continue;
-                bool any = false; foreach (var p in puffs) if (p.draw == kv.Key) { any = true; break; }
+                bool any = used.Contains(d);
                 if (d.gameObject.activeSelf != any) d.gameObject.SetActive(any);
-                if (!any) continue;
-                var tex = textures[kv.Key]; float w = tex.width;
-                foreach (var p in puffs)
-                {
-                    if (p.draw != kv.Key) continue;
-                    float u = p.age / p.life;
-                    float a = p.a * Mathf.Clamp01(u / 0.12f) * Mathf.Clamp01((1f - u) / 0.5f);
-                    float s = Mathf.Lerp(p.s0, p.s1, Mathf.Sqrt(u)) / w;
-                    d.drawImage(p.pos.x, p.pos.y, s, s, 0f, a, 3);
-                }
-                d.updatePaint();
             }
+            foreach (var p in puffs)
+            {
+                if (p.d == null) continue;
+                float u = p.age / p.life;
+                float a = p.a * Mathf.Clamp01(u / 0.12f) * Mathf.Clamp01((1f - u) / 0.5f);
+                float s = Mathf.Lerp(p.s0, p.s1, Mathf.Sqrt(u)) / p.w;
+                p.d.drawImage(p.pos.x, p.pos.y, s, s, 0f, a, 3);
+            }
+            foreach (var d in used) d.updatePaint();
+            used.Clear();
         }
+        static readonly HashSet<TextureDrawer> used = new HashSet<TextureDrawer>();
     }
 }
