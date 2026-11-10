@@ -27,7 +27,7 @@
 [list]
 [*]需要游戏 0.9.0020 或更新版本。订阅后在游戏的模组菜单里启用。
 [*]觉得卡的时候，可以把性能日志 [i]C:/Users/<用户名>/AppData/LocalLow/CatStudio/Outer Space/EfTurrets/EfTurrets-perf.log[/i] 附在反馈里。
-[*]反馈和联系：QQ 3257696116
+[*]反馈和联系：QQ群 1131996767
 [*]源代码（GPL-3.0）：https://github.com/zh667/OuterSpaceEfTurrets
 [*]非官方模组，与游戏开发商无关。塔的外观由其他游戏的模型渲染而来，相关权利归原所有者。
 [/list]
